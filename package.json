@@ -1,7 +1,7 @@
 {
   "name": "dsh-pet-component",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "packageManager": "pnpm@11.25.0",
   "description": "把 dsh-pet 与 Codex Pet 两套桌宠协议收进一个 <Pet> React 组件",
   "author": "Hairyf <wwu710632@gmail.com>",
@@ -83,7 +83,7 @@
     "vitest": "catalog:testing"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && pnpm run build && npx nano-staged"
+    "pre-commit": "pnpm --config.manage-package-manager-versions=true i --frozen-lockfile --ignore-scripts --offline && pnpm run build && npx nano-staged"
   },
   "nano-staged": {
     "*.{js,cjs,mjs,jsx,ts,tsx,mts,cts,vue,json,jsonc,md,yml,yaml,toml}": "eslint --fix"

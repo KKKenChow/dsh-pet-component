@@ -10,7 +10,7 @@ export interface DshPetConfig {
   // ...
 }
 
-export interface PetProps {
+export interface DshPetProps {
   size?: number
   // dsh-pet 的配置文件地址或对象
   config: string | DshPetConfig
@@ -29,12 +29,12 @@ export interface PetProps {
   onHitboxPointerUp?: (e: PointerEvent<HTMLDivElement>) => void
   onHitboxPointerCancel?: (e: PointerEvent<HTMLDivElement>) => void
 }
-export function Pet(props: PetProps) {
+export function DshPet(props: DshPetProps) {
   // ...
 }
 ```
 
-组件实例：
+组件实例:
 
 
 
@@ -103,7 +103,41 @@ pet.clear() // 清除当前动作，切换为 idle
 
 return (
   <Pet ref={petRef} />
-  // or
-  <CodexPet ref={petRef} />
 )
+```
+
+需要实现文件：
+
+```
+- src/components/codex-pet.tsx
+- src/components/dsh-pet.tsx
+- src/components/pet.tsx
+
+- src/hooks/use-controllable-pet.ts
+
+- src/config/index.ts
+- src/types/*
+- src/utils/*
+- src/utils/jsonc.ts // 移除注释并解析
+- src/index.ts
+- playground/src/App.tsx
+```
+
+已有基础实现：
+
+```
+- hooks/use-i-d-b-keyval.tsx
+```
+
+可使用的依赖库：
+
+```
+- css-render
+- idb-keyval
+```
+
+可使用的工具：
+
+```
+- fetch
 ```

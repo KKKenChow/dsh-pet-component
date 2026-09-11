@@ -22,7 +22,7 @@
 - **同构动作池**：内置 14 个同构动作（覆盖 dsh-pet 的 `workStatus` 档位），集成默认循环语义。
 - **双模控制**：支持声明式（`motion` prop）与命令式（`pet.motion(...)` 插播）混合使用。
 - **智能拖拽分流**：dsh-pet 播放「悬空拽起」动画，Codex 智能切为「左右行走」模式；命中区独立安全隔离。
-- **点击回应**：双击判定后插播 `waving`（dsh 取 `animations.clicks` 池，Codex 走 `waving` 行），与拖拽共用同一命中框仲裁。
+- **内置双击**：命中框连按两次即插播 `waving`（dsh 取 `animations.clicks` 池，Codex 走 `waving` 行），宿主无需自己判定。
 - **跨会话缓存**：内置 IndexedDB 缓存机制（`cache` 默认开启），实现 Blob 与 Object URL 跨会话复用。
 
 ---
@@ -137,51 +137,17 @@ export function App() {
 
 ### 双击交互
 
-双击是**「点击回应」手势**：dsh-pet 走 `animations.clicks` 池（如「点击回应-开心跃动」），Codex 走图集的 `waving` 行。它是一次性风味动作，因此**不像 `dragging` 那样有独立 prop** —— 由宿主判定双击后命令式插播即可，协议差异全部由组件抹平：
+双击是**「点击回应」手势**，`<Pet>` 已内置判定：命中框上两次按下间隔小于 500ms 即插播一次 `pet.motion({ type: 'waving', replay: true })`，宿主不需要自己接线。协议差异全部由组件抹平：
 
 | 维度 | dsh-pet | Codex Pet |
 | --- | --- | --- |
 | **双击表现** | 从 `animations.clicks` 池抽一条播放（`motion: 'waving'`） | 播 `waving` 行（row 3，4 帧 × 140ms） |
-| **触发入口** | `pet.motion({ type: 'waving', replay: true })` | 同一入口（`waving → waving`） |
 | **回落语义** | 单次触发类（`loop: false`），播完回落 `idle` | 同左 |
 
-判定挂在命中框的指针事件上（与拖拽共用同一个 `hitboxRef`）：
-
-```tsx
-import { useCallback, useRef } from 'react'
-
-/** 两次按下间隔 < 500ms 即算一次双击（`DOUBLE_CLICK_MS`）。 */
-function useDoubleClick(onDoubleClick: () => void, window = 500) {
-  const lastDownRef = useRef<number>(undefined)
-
-  return useCallback(() => {
-    const now = performance.now()
-    const last = lastDownRef.current
-    lastDownRef.current = now
-    if (last === undefined || now - last >= window)
-      return
-    lastDownRef.current = undefined // 判定后清空：连击不会连环触发
-    onDoubleClick()
-  }, [onDoubleClick, window])
-}
-```
-
-```tsx
-const onHitboxPointerDown = useDoubleClick(() => {
-  // replay 不能省：同一动作重复下发默认会被去重，动画不会重头播
-  pet.motion({ type: 'waving', replay: true })
-})
-
-return (
-  <Pet
-    ref={petRef}
-    config={config}
-    uri={uri}
-    hitboxRef={hitboxRef}
-    onHitboxPointerDown={onHitboxPointerDown}
-  />
-)
-```
+* **只认双击**：单击不发任何动作，不会与状态动画、拖拽抢画面；`replay: true` 保证连按两次都能从头播。
+* **松手才落地**：命中在第二次按下的 `pointerup` 才触发；传了 `dragging` 时，窗口内一旦变成拖动就作废窗口并丢掉待定的那次 ——「点一下 → 500ms 内又拖一下」不会误播。
+* **与宿主回调共存**：内置判定叠加在你传入的 `onHitboxPointerDown` / `onHitboxPointerUp` / `onHitboxPointerCancel` 之外，宿主自己的指针回调照常收到事件。
+* **实现**：判定窗口用 [@reaxuse/core](https://github.com/hairyf/reaxuse) 的 `useStateAutoReset` 表达，见 `src/hooks/use-double-click.ts`。
 
 ---
 

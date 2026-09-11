@@ -62,6 +62,8 @@ export function App() {
 
 > `config` 属性亦可直接传入配置对象以跳过 `useConfig` 异步加载。
 
+查看在线浏览：https://dsh-pet-component.vercel.app/
+
 ---
 
 ## 💡 进阶指南
@@ -109,7 +111,7 @@ pet.clear()                    // 撤销插播，无缝自动回落至 'working'
 | **拖拽表现** | 循环播放 `animations.drag`（被无形抓起悬空） | 根据移动方向自动切为左右行走 |
 | **走路素材** | 使用 `animations.moves`（`moving-left` / `moving-right`） | 复用同一套行走向素材 |
 
-容器推移可配合 [@reause/core](https://github.com/hairyf/reause) 的 `useDraggable` 使用：
+容器推移可配合 [@reause/core](https://reause.netlify.app/core/useDraggable/) 的 `useDraggable` 使用：
 
 ```tsx
 import { useDraggable } from '@reause/core'

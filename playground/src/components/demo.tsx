@@ -67,7 +67,7 @@ const COMMANDS: { label: string, input: MotionInput, code: string }[] = [
  * | 命令式动作 | `useControllablePet` → `pet.motion(...)` / `pet.clear()` |
  * | 拖动 | `useDraggable` + `dragging` prop（dsh → 悬空，Codex → 左右行走） |
  * | 走路素材 | `moving-left` / `moving-right`（dsh 取 `moves` 池，与拖动是两套素材） |
- * | 点击回应 | 双击判定 → `pet.motion({ type: 'waving', replay: true })` |
+ * | 点击回应 | `<Pet>` 内置双击判定（命中框连按两次即插播 `waving`） |
  * | 缓存 | `cache` prop（资源落 IndexedDB，第二次走本地） |
  * | 只读回显 | `onMotionChange` / `onAnimationChange` + `data-look` |
  * | 媒体控制 | 见 `media-player.tsx`（playground 自己的 `useMediaControls`） |
@@ -92,7 +92,6 @@ export function PetDemo() {
   const [animation, setAnimation] = useState<PetAnimationInfo | null>(null)
   const [status, setStatus] = useState('等待资源…')
   const [lastCommand, setLastCommand] = useState('—')
-  const [clicks, setClicks] = useState(0)
 
   // 配置回显（与 `Pet` 共用同一份配置缓存，不会重复拉取）
   const { config, loading, error: configError } = useConfig(asset.config)
@@ -128,14 +127,9 @@ export function PetDemo() {
   }, [pet])
 
   // 拖动机械部分用库里的 useDraggable；handle 是组件的 hitboxRef（命中框），
-  // 阈值 8px / 方向 3px / 双击 500ms 的判定在 usePetDrag 里按参考实现补
-  const drag = usePetDrag({
-    containerRef: stageRef,
-    onDoubleClick: () => {
-      setClicks(count => count + 1)
-      runCommand({ type: 'waving', replay: true }, `pet.motion({ type: 'waving', replay: true })`)
-    },
-  })
+  // 位移阈值 8px / 方向 3px 的判定在 usePetDrag 里按参考实现补。
+  // 双击（点击回应）由 <Pet> 内置判定，这里不再自己接线。
+  const drag = usePetDrag({ containerRef: stageRef })
   const { dragging, direction } = drag
   const motion = direction ? { left: 'moving-left', right: 'moving-right' }[direction] as PetRenderMotion : prefs.motion
 
@@ -195,7 +189,11 @@ export function PetDemo() {
             （宠物身体那一小块，勾上「显示命中框」可以看到），点空白处不起拖。拖动时
             {' '}
             {isCodex ? 'Codex 按方向播左右行走行' : 'dsh-pet 只播 animations.drag 的悬空姿势（走路素材在动作墙里手动触发）'}
-            ，单击不播拖动动画，双击播一次点击回应。当前方向：
+            ，单击不播拖动动画；双击由
+            {' '}
+            <code>&lt;Pet&gt;</code>
+            {' '}
+            内置判定，命中即插播一次点击回应。当前方向：
             <code>{direction ?? '—'}</code>
           </p>
 
@@ -260,10 +258,6 @@ export function PetDemo() {
             <div>
               <dt>最近一条命令</dt>
               <dd><code>{lastCommand}</code></dd>
-            </div>
-            <div>
-              <dt>双击次数</dt>
-              <dd>{clicks}</dd>
             </div>
             <div>
               <dt>配置</dt>
@@ -370,7 +364,7 @@ export function PetDemo() {
               min={80}
               max={520}
               suffix="px"
-              onChange={value => update('sizes', { ...prefs.sizes, [(asset as any).uri]: value })}
+              onChange={value => update('sizes', { ...prefs.sizes, [prefs.asset]: value })}
             />
           </div>
 

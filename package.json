@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.0",
   "packageManager": "pnpm@11.25.0",
-  "description": "_description_",
+  "description": "把 dsh-pet 与 Codex Pet 两套桌宠协议收进一个 <Pet> React 组件",
   "author": "Hairyf <wwu710632@gmail.com>",
   "license": "MIT",
   "funding": "https://github.com/sponsors/hairyf",
@@ -26,6 +26,7 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "dev:playground": "cd playground && pnpm run dev",
     "lint": "eslint",
     "prepack": "nr build",
     "release": "bumpp",
@@ -49,6 +50,8 @@
     "react": "^19.0.0"
   },
   "dependencies": {
+    "@reause/core": "catalog:",
+    "@reause/integrations": "catalog:",
     "css-render": "catalog:",
     "idb-keyval": "catalog:"
   },

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { CodexPetConfig, CodexPetProps, PetAnimationInfo, PetConfigSource, PetRenderMotion } from '../types'
+import { useEventListener, usePreferredReducedMotion } from '@reause/core'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CODEX_DEFAULT_SIZE,
@@ -16,7 +17,6 @@ import {
 import { useCachedMediaUrl } from '../hooks/use-cached-media'
 import { useConfig } from '../hooks/use-config'
 import { usePetMotion } from '../hooks/use-pet-motion'
-import { useReducedMotion } from '../hooks/use-reduced-motion'
 import { useSpritePlayer } from '../hooks/use-sprite-player'
 import { mountPetStyles } from '../styles'
 import { useIsomorphicLayoutEffect } from '../utils/react'
@@ -98,8 +98,8 @@ export function CodexPet(props: CodexPetProps) {
 
   const { config, error: configError } = useConfig<CodexPetConfig>(configSource)
   const { state, finish } = usePetMotion({ motion, ref, onMotionChange })
-  // 减少动效跟随系统偏好（`prefers-reduced-motion`）
-  const reducedMotion = useReducedMotion()
+  // 减少动效跟随系统偏好（`prefers-reduced-motion`，reause 的媒体查询 hook）
+  const reducedMotion = usePreferredReducedMotion() === 'reduce'
 
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
@@ -169,21 +169,25 @@ export function CodexPet(props: CodexPetProps) {
     && state.loop
     && isCodexLookSupported(config)
 
-  useEffect(() => {
-    if (!lookSupported)
-      return undefined
-    const onPointerMove = (event: PointerEvent) => {
-      const element = containerRef.current
-      if (element === null)
-        return
-      const rect = element.getBoundingClientRect()
-      const offsetX = event.clientX - (rect.left + rect.width / 2)
-      const offsetY = event.clientY - (rect.top + rect.height / 2)
-      setLookIndex(resolveLookIndex({ x: offsetX, y: offsetY }, lookDeadzone))
-    }
-    window.addEventListener('pointermove', onPointerMove, { passive: true })
-    return () => window.removeEventListener('pointermove', onPointerMove)
-  }, [lookDeadzone, lookSupported])
+  // 监听交给 reause 的 `useEventListener`（默认目标就是 window，SSR 安全）：
+  // 不用自己维护 add / remove 与依赖重绑；`lookSupported` 不成立时回调直接返回，
+  // 所以关掉 look / 非 idle / 减少动效时不会产生任何额外渲染。
+  const lookSupportedRef = useRef(lookSupported)
+  lookSupportedRef.current = lookSupported
+  const lookDeadzoneRef = useRef(lookDeadzone)
+  lookDeadzoneRef.current = lookDeadzone
+
+  useEventListener('pointermove', (event: PointerEvent) => {
+    if (!lookSupportedRef.current)
+      return
+    const element = containerRef.current
+    if (element === null)
+      return
+    const rect = element.getBoundingClientRect()
+    const offsetX = event.clientX - (rect.left + rect.width / 2)
+    const offsetY = event.clientY - (rect.top + rect.height / 2)
+    setLookIndex(resolveLookIndex({ x: offsetX, y: offsetY }, lookDeadzoneRef.current))
+  }, { passive: true })
 
   // 不支持的场合（v1 图集 / 非 idle / 减少动效）直接忽略 last look，无需回到 effect 里清状态
   const effectiveLookIndex = lookSupported ? lookIndex : undefined

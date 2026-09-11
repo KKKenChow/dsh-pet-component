@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { IdleRollPick } from '../config'
 import type { DshPetConfig, DshPetProps, PetAnimationInfo, PetRenderMotion } from '../types'
+import { usePreferredReducedMotion } from '@reause/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   isLoopingMotion,
@@ -19,7 +20,6 @@ import { useCachedMediaUrl } from '../hooks/use-cached-media'
 import { useConfig } from '../hooks/use-config'
 import { useIdleRoll } from '../hooks/use-idle-roll'
 import { usePetMotion } from '../hooks/use-pet-motion'
-import { useReducedMotion } from '../hooks/use-reduced-motion'
 import { useVideoCrossfade } from '../hooks/use-video-crossfade'
 import { mountPetStyles } from '../styles'
 import { resolveAssetUrl, resolvePlatformValue } from '../utils/env'
@@ -95,8 +95,8 @@ export function DshPet(props: DshPetProps) {
 
   const { config, error: configError } = useConfig<DshPetConfig>(configSource)
   const { state, finish } = usePetMotion({ motion, ref, onMotionChange })
-  // 减少动效跟随系统偏好（`prefers-reduced-motion`）
-  const reducedMotion = useReducedMotion()
+  // 减少动效跟随系统偏好（`prefers-reduced-motion`，reause 的媒体查询 hook）
+  const reducedMotion = usePreferredReducedMotion() === 'reduce'
 
   useEffect(() => {
     if (configError !== null)

@@ -16,5 +16,5 @@
     "skipDefaultLibCheck": true,
     "skipLibCheck": true
   },
-  "include": ["src", "test", "*.config.ts", "playground/src/hooks/use-draggable.ts", "playground/src/hooks/use-media-controls.ts"]
+  "include": ["src", "test", "*.config.ts"]
 }

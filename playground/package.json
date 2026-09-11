@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@reause/core": "catalog:",
     "dsh-pet-component": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"

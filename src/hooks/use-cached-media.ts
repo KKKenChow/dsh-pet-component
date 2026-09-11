@@ -1,6 +1,6 @@
+import { useIDBKeyval } from '@reause/integrations/useIDBKeyval'
 import { useEffect, useRef, useState } from 'react'
 import { createMediaObjectUrl, fetchMediaBlob, MEDIA_CACHE_PREFIX } from '../utils/media-cache'
-import { useIDBKeyval } from './use-idb-keyval'
 
 /** 缓存条目：自带 `source` 标记，理由见下方。 */
 interface MediaCacheEntry {

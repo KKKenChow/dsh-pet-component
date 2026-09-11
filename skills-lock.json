@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "reause-functions": {
+      "source": "hairyf/reause",
+      "sourceType": "github",
+      "skillPath": "skills/reause-functions/SKILL.md",
+      "computedHash": "720a91fb3bbd0fc29add417f683e0e68734c6d43b573917a4e6479eb23748dde"
+    }
+  }
+}

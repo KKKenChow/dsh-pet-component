@@ -29,7 +29,7 @@
  * ```
  *
  * 其余（资源解析、JSONC、IndexedDB 缓存、双视频缓冲、帧循环、动作池拾取…）都是实现细节，
- * 不构成公开 API —— 需要时看 `docs/api.md` 的设计说明。
+ * 不构成公开 API —— 需要时直接看对应模块的源码注释。
  */
 export { Pet } from './components/pet'
 export { useConfig } from './hooks/use-config'

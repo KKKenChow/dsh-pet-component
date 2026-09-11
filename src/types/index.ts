@@ -1,0 +1,30 @@
+export type {
+  AnimationSlot,
+  Category,
+  CodexPetConfig,
+  CodexPetFrameSpec,
+  DshPetAnimations,
+  DshPetConfig,
+  DshPetEntry,
+  EventSlot,
+  MovesConfig,
+  MoveSpec,
+  PetConfig,
+  PetConfigSource,
+  PetCorner,
+  PetDisplay,
+  PetEvents,
+  PetWeights,
+  PhysicsParams,
+} from './config'
+export type { Motion, MotionInput, MotionOptions, PetRenderMotion } from './motion'
+export { isMotion, motionInputKey, MOTIONS, normalizeMotionInput } from './motion'
+export type {
+  CodexPetProps,
+  DshPetProps,
+  PetAnimationInfo,
+  PetCommonProps,
+  PetHitboxProps,
+  PetProps,
+  PetRef,
+} from './props'

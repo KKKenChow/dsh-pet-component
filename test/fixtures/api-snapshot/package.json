@@ -1,0 +1,9 @@
+{
+  "name": "dsh-pet-component",
+  "private": true,
+  "//": "API 快照要盯的是【发布出去的入口】。本包启用了 tsdown 的 devExports（开发期 package.json 的 exports 指向 ./src/index.ts，发布期由 publishConfig.exports 覆盖为 ./dist/index.mjs），而 tsnapi 只认 JS 入口——所以这里用同一个包名声明发布入口（路径相对本目录），快照路径与包名保持不变。",
+  "exports": {
+    ".": "../../../dist/index.mjs",
+    "./package.json": "../../../package.json"
+  }
+}

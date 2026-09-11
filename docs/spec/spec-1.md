@@ -106,9 +106,10 @@ return (
 )
 ```
 
+## 约束
+
 需要实现文件：
 
-```
 - src/components/codex-pet.tsx
 - src/components/dsh-pet.tsx
 - src/components/pet.tsx
@@ -121,23 +122,23 @@ return (
 - src/utils/jsonc.ts // 移除注释并解析
 - src/index.ts
 - playground/src/App.tsx
-```
 
 已有基础实现：
 
-```
-- hooks/use-i-d-b-keyval.tsx
-```
+- hooks/use-idb-keyval.ts
+- hooks/use-media-controls.ts
 
 可使用的依赖库：
 
-```
 - css-render
 - idb-keyval
-```
 
 可使用的工具：
 
-```
 - fetch
-```
+
+## 需要参考的项目
+
+- soruce/dsh-pet
+- soruce/codex-to-dsh-pet
+- soruce/deepseek-harness-desktop

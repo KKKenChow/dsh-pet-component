@@ -16,7 +16,7 @@
   "keywords": [],
   "sideEffects": false,
   "exports": {
-    ".": "./dist/index.mjs",
+    ".": "./src/index.ts",
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",
@@ -45,12 +45,21 @@
     "typecheck": "Check types",
     "prepare": "Set up git hooks and skills"
   },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "dependencies": {
+    "css-render": "catalog:",
+    "idb-keyval": "catalog:"
+  },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",
     "@antfu/ni": "catalog:cli",
     "@antfu/utils": "catalog:inlined",
     "@eslint-react/eslint-plugin": "catalog:",
     "@types/node": "catalog:types",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "bumpp": "catalog:cli",
     "eslint": "catalog:cli",
     "eslint-plugin-react-refresh": "catalog:",
@@ -58,6 +67,8 @@
     "eslint-plugin-sonarjs": "catalog:cli",
     "nano-staged": "catalog:cli",
     "publint": "catalog:cli",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "simple-git-hooks": "catalog:cli",
     "skills-npm": "catalog:cli",
     "tsdown": "catalog:cli",
@@ -73,5 +84,11 @@
   },
   "nano-staged": {
     "*.{js,cjs,mjs,jsx,ts,tsx,mts,cts,vue,json,jsonc,md,yml,yaml,toml}": "eslint --fix"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./package.json": "./package.json"
+    }
   }
 }

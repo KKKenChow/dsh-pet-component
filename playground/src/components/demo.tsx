@@ -370,7 +370,7 @@ export function PetDemo() {
               min={80}
               max={520}
               suffix="px"
-              onChange={value => update('sizes', { ...prefs.sizes, [(asset as any).uri]: value })}
+              onChange={value => update('sizes', { ...prefs.sizes, [prefs.asset]: value })}
             />
           </div>
 

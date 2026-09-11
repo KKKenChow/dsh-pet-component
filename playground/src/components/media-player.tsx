@@ -1,7 +1,5 @@
+import { useMediaControls } from '@reaxuse/core'
 import { useEffect, useRef } from 'react'
-// `useMediaControls` 是仓库里既有的通用 hook（不属于本包的公开 API），
-// 与 `hooks/use-draggable.ts` 一样按相对路径直接引源码
-import { useMediaControls } from '../hooks/use-media-controls'
 
 export interface MediaPlayerProps {
   /** 要播放的动画资源地址（通常来自 `onAnimationChange`）；`null` = 没有单条视频可播 */
@@ -20,8 +18,8 @@ function formatTime(seconds: number): string {
 }
 
 /**
- * 单条动画播放器 —— `useMediaControls`（VueUse 同名 hook 的 React 移植）的用法演示：
- * 换 `src` 就重播，带播放 / 暂停、进度条、倍速。
+ * 单条动画播放器 —— reaxuse 的 `useMediaControls`（VueUse 同名 hook 的 React 移植）
+ * 的用法演示：换 `src` 就重播，带播放 / 暂停、进度条、倍速。
  *
  * 与宠物本体是**两条独立链路**：这里把播放状态提成 React state
  * （`currentTime` 每帧都在变），适合「盯着看一条动画」；宠物那边要零重渲染，

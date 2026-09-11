@@ -52,6 +52,12 @@ catalogs:
     '@eslint-react/eslint-plugin':
       specifier: ^5.18.6
       version: 5.19.0
+    '@reaxuse/core':
+      specifier: ^0.1.2
+      version: 0.1.2
+    '@reaxuse/integrations':
+      specifier: ^0.1.2
+      version: 0.1.2
     '@types/react':
       specifier: ^19.2.18
       version: 19.3.0
@@ -99,6 +105,12 @@ importers:
 
   .:
     dependencies:
+      '@reaxuse/core':
+        specifier: 'catalog:'
+        version: 0.1.2(react@19.3.0)
+      '@reaxuse/integrations':
+        specifier: 'catalog:'
+        version: 0.1.2(change-case@5.4.4)(idb-keyval@6.3.0)(react@19.3.0)
       css-render:
         specifier: 'catalog:'
         version: 0.15.14
@@ -184,6 +196,9 @@ importers:
 
   playground:
     dependencies:
+      '@reaxuse/core':
+        specifier: 'catalog:'
+        version: 0.1.2(react@19.3.0)
       dsh-pet-component:
         specifier: workspace:*
         version: link:..
@@ -934,6 +949,58 @@ packages:
 
   '@quansync/fs@1.0.0':
     resolution: {integrity: sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ==}
+
+  '@reaxuse/core@0.1.2':
+    resolution: {integrity: sha512-Hn7zeCyQ3L6GZCnkABTvuJ+i1QkXYyZ8HrLqJrXBkhAuKH1naI4aTox0mEn0R1jDm20qVgGCd4KV91u290OsFw==}
+    peerDependencies:
+      react: '>=18'
+
+  '@reaxuse/integrations@0.1.2':
+    resolution: {integrity: sha512-UPcwrDQutW/I8mABQg/QRsOFqCe9ZZTKEM60WKh277YKSFdy/6yWJJ111vkqZu9/8Jthf0ncZY4c0av3gM5Oug==}
+    peerDependencies:
+      async-validator: ^4
+      axios: ^1
+      change-case: ^5
+      drauu: ^1
+      focus-trap: ^7 || ^8
+      fuse.js: ^7
+      idb-keyval: ^6
+      jwt-decode: ^4
+      nprogress: ^0.2
+      qrcode: ^1.5
+      react: '>=18'
+      sortablejs: ^1
+      universal-cookie: ^7 || ^8
+    peerDependenciesMeta:
+      async-validator:
+        optional: true
+      axios:
+        optional: true
+      change-case:
+        optional: true
+      drauu:
+        optional: true
+      focus-trap:
+        optional: true
+      fuse.js:
+        optional: true
+      idb-keyval:
+        optional: true
+      jwt-decode:
+        optional: true
+      nprogress:
+        optional: true
+      qrcode:
+        optional: true
+      sortablejs:
+        optional: true
+      universal-cookie:
+        optional: true
+
+  '@reaxuse/shared@0.1.2':
+    resolution: {integrity: sha512-/cM/dX3tvxv6U83GMHLzfY7u4mDLbN/M4Xs7izbMHAx0vb8YD0FwuFmc6JJ4S33HItC9Azx9U0z9NyQWAPH0mw==}
+    peerDependencies:
+      react: '>=18'
 
   '@rolldown/binding-android-arm-eabi@1.2.6':
     resolution: {integrity: sha512-b+jTcARdTiFLI6jB4a5XjTm0RWd6KcRfQj/I2356fxUZemiho9zQLxo0RtCuMDAyKcLo6cEltkgbQp6d1+sjjQ==}
@@ -3621,6 +3688,23 @@ snapshots:
   '@quansync/fs@1.0.0':
     dependencies:
       quansync: 1.0.0
+
+  '@reaxuse/core@0.1.2(react@19.3.0)':
+    dependencies:
+      '@reaxuse/shared': 0.1.2(react@19.3.0)
+      react: 19.3.0
+
+  '@reaxuse/integrations@0.1.2(change-case@5.4.4)(idb-keyval@6.3.0)(react@19.3.0)':
+    dependencies:
+      '@reaxuse/shared': 0.1.2(react@19.3.0)
+      react: 19.3.0
+    optionalDependencies:
+      change-case: 5.4.4
+      idb-keyval: 6.3.0
+
+  '@reaxuse/shared@0.1.2(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
 
   '@rolldown/binding-android-arm-eabi@1.2.6':
     optional: true

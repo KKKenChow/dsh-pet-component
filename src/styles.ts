@@ -1,5 +1,5 @@
 import { CssRender } from 'css-render'
-import { isBrowser } from './utils/react'
+import { isBrowser } from './utils/env'
 
 /**
  * 组件样式（`css-render`）。

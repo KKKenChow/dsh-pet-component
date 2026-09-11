@@ -6,6 +6,9 @@
  * `{ default, mac? }` 形状。
  */
 
+/** 是否在浏览器环境（SSR 下为 `false`）。 */
+export const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined'
+
 /** 当前是否 Apple 平台（macOS / iOS / iPadOS）。SSR 下返回 `false`。 */
 export function isMacPlatform(): boolean {
   if (typeof navigator === 'undefined')

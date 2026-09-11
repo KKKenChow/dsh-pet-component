@@ -13,6 +13,13 @@
 | **[Dsh Pet](https://github.com/PC2005-cloud/dsh-pet)** | `assets/config.jsonc` | 逐动作透明视频（VP9-alpha `.webm` / macOS HEVC-alpha `.mov`） |
 | **[Codex Pet](https://github.com/Signalight/codex-to-dsh-pet)** | `pet.json` | 8 列单图雪碧图（192×208，9 行 v1 / 11 行 v2） |
 
+> **定位：面向 Desktop 场景。** 本库是从桌面端桌宠窗口里抽出来的组件，主战场是
+> **Tauri / Electron / WebView 里的常驻透明小窗**：资源多为随应用分发的本地文件、窗口长期挂着、
+> 动作由宿主的会话状态驱动。浏览器页面（含本仓库的 playground）属于顺带支持的次要场景 ——
+> 那时资源走远端 `https`，`cache` 的 IndexedDB 缓存是**尽力而为**的：一旦页面环境不允许
+> `fetch`（CSP `connect-src`、内容拦截扩展、代理），组件会自动降级成直接使用原始地址播放，
+> 只是这次没有本地缓存，不影响显示。
+
 ---
 
 ## ✨ 核心特性

@@ -12,6 +12,14 @@ interface MediaCacheEntry {
 const IDLE_KEY = `${MEDIA_CACHE_PREFIX}@none`
 
 /**
+ * 会话内已经「抓不下来」的资源（模块级，多实例共用）。
+ *
+ * 视频本来就是从原始地址读的，抓不下来只是**这次没有本地缓存**，不是播放故障；
+ * 记下来之后同一个资源不再重试、不再重复提醒，直接按原始地址走。
+ */
+const uncacheableSources = new Set<string>()
+
+/**
  * `cache` prop 的实现 —— **存储交给 `useIDBKeyval`**：读 IndexedDB、写回、
  * 跨标签页同步都由它负责，这里只管「用哪个地址」和「未命中时把资源抓回来写进去」。
  *
@@ -29,12 +37,17 @@ const IDLE_KEY = `${MEDIA_CACHE_PREFIX}@none`
  * - **开缓存时先等首次读取落地再定地址**：`useIDBKeyval` 的读是异步的，不等它就会先按
  *   远端地址起播、读完发现命中再换 blob，白白多加载一次（断网时还直接失败）。
  *
+ * 抓取失败（`fetchMediaBlob` 内部已重试一次）**当降级处理**：视频照播，只是这次没落进
+ * IndexedDB。该 source 会被记进 `uncacheableSources`，之后不再重试；提醒也只给一次 ——
+ * 它不是播放故障，宿主不该据此中断显示。典型触发场景是页面环境本身禁止 `fetch`
+ * （CSP `connect-src`、内容拦截扩展、代理），而 `<video>` / `<img>` 走 no-cors 照样能拿到资源。
+ *
  * 条目为什么要带 `source` 标记：`useIDBKeyval` 在 key 变化时只重读、**不复位 state**
  * （读到缺失的 key 更会一直留着上一个 key 的值），标记对不上就不算命中，避免张冠李戴。
  *
  * @param source 资源原始地址（`null` 表示还没有可播资源）
  * @param cache 是否启用 IndexedDB 缓存
- * @param onError 读取 / 抓取失败回调（不阻断播放）
+ * @param onError 读取 / 抓取失败回调（不阻断播放；抓取失败按 source 只提醒一次）
  * @returns 喂给 `<video>` / 背景图的地址
  */
 export function useCachedMediaUrl(
@@ -60,16 +73,20 @@ export function useCachedMediaUrl(
   if (source !== null && !settling && resolved?.source !== source)
     setResolved({ source, src: hit !== null ? createMediaObjectUrl(source, hit) : source })
 
-  // 未命中：抓一次交给 useIDBKeyval 写回；命中一旦落地就中止这次抓取
+  // 未命中：抓一次交给 useIDBKeyval 写回；命中一旦落地就中止这次抓取。
+  // 已经判定抓不下来的 source 直接跳过 —— 不重试、不重复提醒（见 uncacheableSources）
   useEffect(() => {
-    if (source === null || !cache || !isFinished || hit !== null)
+    if (source === null || !cache || !isFinished || hit !== null || uncacheableSources.has(source))
       return undefined
     const controller = new AbortController()
     void fetchMediaBlob(source, controller.signal)
       .then(blob => setStored({ source, blob }))
       .catch((error: unknown) => {
-        if (!controller.signal.aborted)
-          onErrorRef.current?.(error)
+        // 中止（切动画 / 卸载）不算失败；其余失败按降级处理：视频照播，只是这次没缓存
+        if (controller.signal.aborted || uncacheableSources.has(source))
+          return
+        uncacheableSources.add(source)
+        onErrorRef.current?.(error)
       })
     return () => controller.abort()
   }, [cache, hit, isFinished, setStored, source])

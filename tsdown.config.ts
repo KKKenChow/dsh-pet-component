@@ -6,7 +6,11 @@ export default defineConfig({
     'src/index.ts',
   ],
   dts: true,
-  exports: true,
+
+  exports: {
+    enabled: true,
+    devExports: true,
+  },
   publint: true,
   plugins: [
     StaleGuardRecorder(),

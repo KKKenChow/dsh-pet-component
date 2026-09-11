@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { IdleRollPick } from '../config'
 import type { DshPetConfig, DshPetProps, PetAnimationInfo, PetRenderMotion } from '../types'
-import { usePreferredReducedMotion } from '@reaxuse/core'
+import { usePreferredReducedMotion } from '@reause/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   isLoopingMotion,
@@ -95,7 +95,7 @@ export function DshPet(props: DshPetProps) {
 
   const { config, error: configError } = useConfig<DshPetConfig>(configSource)
   const { state, finish } = usePetMotion({ motion, ref, onMotionChange })
-  // 减少动效跟随系统偏好（`prefers-reduced-motion`，reaxuse 的媒体查询 hook）
+  // 减少动效跟随系统偏好（`prefers-reduced-motion`，reause 的媒体查询 hook）
   const reducedMotion = usePreferredReducedMotion() === 'reduce'
 
   useEffect(() => {

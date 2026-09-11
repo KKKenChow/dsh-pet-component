@@ -1,11 +1,11 @@
 {
   "version": 1,
   "skills": {
-    "reaxuse-functions": {
-      "source": "hairyf/reaxuse",
+    "reause-functions": {
+      "source": "hairyf/reause",
       "sourceType": "github",
-      "skillPath": "skills/reaxuse-functions/SKILL.md",
-      "computedHash": "35c5a1a8fe4f4c2c4a6a16e1b08b59ef34204786942a2c887880edde46ad4926"
+      "skillPath": "skills/reause-functions/SKILL.md",
+      "computedHash": "720a91fb3bbd0fc29add417f683e0e68734c6d43b573917a4e6479eb23748dde"
     }
   }
 }

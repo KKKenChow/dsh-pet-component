@@ -1,5 +1,5 @@
 import type { Motion } from 'dsh-pet-component'
-import { useLocalStorage } from '@reaxuse/core'
+import { useLocalStorage } from '@reause/core'
 
 /** 演示面板上的可调项。 */
 export interface PlaygroundPrefs {
@@ -44,7 +44,7 @@ export interface UsePlaygroundPrefsResult {
 }
 
 /**
- * Playground 的偏好持久化 —— 直接交给 reaxuse 的 `useLocalStorage`
+ * Playground 的偏好持久化 —— 直接交给 reause 的 `useLocalStorage`
  * （VueUse `useLocalStorage` 的 React 移植）存到 `window.localStorage`：
  * 跨刷新保留、跨标签页同步、类型猜测序列化、`mergeDefaults` 浅合并都在它里面，
  * 这里不再自带一份 storage 实现。写的是整个对象

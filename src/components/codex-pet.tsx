@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { CodexPetConfig, CodexPetProps, PetAnimationInfo, PetConfigSource, PetRenderMotion } from '../types'
-import { useEventListener, usePreferredReducedMotion } from '@reaxuse/core'
+import { useEventListener, usePreferredReducedMotion } from '@reause/core'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CODEX_DEFAULT_SIZE,
@@ -98,7 +98,7 @@ export function CodexPet(props: CodexPetProps) {
 
   const { config, error: configError } = useConfig<CodexPetConfig>(configSource)
   const { state, finish } = usePetMotion({ motion, ref, onMotionChange })
-  // 减少动效跟随系统偏好（`prefers-reduced-motion`，reaxuse 的媒体查询 hook）
+  // 减少动效跟随系统偏好（`prefers-reduced-motion`，reause 的媒体查询 hook）
   const reducedMotion = usePreferredReducedMotion() === 'reduce'
 
   const onReadyRef = useRef(onReady)
@@ -169,7 +169,7 @@ export function CodexPet(props: CodexPetProps) {
     && state.loop
     && isCodexLookSupported(config)
 
-  // 监听交给 reaxuse 的 `useEventListener`（默认目标就是 window，SSR 安全）：
+  // 监听交给 reause 的 `useEventListener`（默认目标就是 window，SSR 安全）：
   // 不用自己维护 add / remove 与依赖重绑；`lookSupported` 不成立时回调直接返回，
   // 所以关掉 look / 非 idle / 减少动效时不会产生任何额外渲染。
   const lookSupportedRef = useRef(lookSupported)

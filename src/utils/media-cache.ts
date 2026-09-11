@@ -1,8 +1,8 @@
 /**
  * 媒体资源的取回与展示地址。
  *
- * **存储本身不在这里**：缓存值由 reaxuse 的 `useIDBKeyval`
- * （`@reaxuse/integrations/useIDBKeyval`）持有 —— 它负责读 IndexedDB、写回、
+ * **存储本身不在这里**：缓存值由 reause 的 `useIDBKeyval`
+ * （`@reause/integrations/useIDBKeyval`）持有 —— 它负责读 IndexedDB、写回、
  * 以及跨标签页同步；`hooks/use-cached-media.ts` 负责「什么时候抓、抓到什么、
  * 怎么变成能播的地址」。
  *

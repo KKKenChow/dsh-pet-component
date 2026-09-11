@@ -1,4 +1,4 @@
-import { useStateAutoReset } from '@reaxuse/core'
+import { useStateAutoReset } from '@reause/core'
 import { useCallback, useEffect } from 'react'
 
 /**
@@ -20,7 +20,7 @@ export interface UseDoubleClickOptions {
  * 双击判定 —— 命中框每次 `pointerdown` 调一次，两次按下间隔小于窗口即命中；
  * 命中后窗口立刻归零（三连按 = 一次双击 + 重新开窗）。
  *
- * 窗口用 reaxuse 的 `useStateAutoReset` 表达：`armed` 为 `true` 表示「窗口还开着」，
+ * 窗口用 reause 的 `useStateAutoReset` 表达：`armed` 为 `true` 表示「窗口还开着」，
  * 超时自动回到 `false`，不需要自己存时间戳。
  *
  * ```tsx

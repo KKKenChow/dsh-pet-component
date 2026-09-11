@@ -1,4 +1,4 @@
-import { useIDBKeyval } from '@reaxuse/integrations/useIDBKeyval'
+import { useIDBKeyval } from '@reause/integrations/useIDBKeyval'
 import { useEffect, useRef, useState } from 'react'
 import { createMediaObjectUrl, fetchMediaBlob, MEDIA_CACHE_PREFIX } from '../utils/media-cache'
 

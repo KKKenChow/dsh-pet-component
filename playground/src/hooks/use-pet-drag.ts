@@ -1,6 +1,6 @@
-import type { UseDraggableOptions } from '@reaxuse/core'
+import type { UseDraggableOptions } from '@reause/core'
 import type { RefObject } from 'react'
-import { useDraggable } from '@reaxuse/core'
+import { useDraggable } from '@reause/core'
 import { useCallback, useRef, useState } from 'react'
 
 /** 拖拽的水平方向。 */
@@ -44,7 +44,7 @@ export interface PetDragResult {
 }
 
 /**
- * Playground 的宠物拖拽 —— 机械部分交给 reaxuse 的 `useDraggable`
+ * Playground 的宠物拖拽 —— 机械部分交给 reause 的 `useDraggable`
  * （VueUse `useDraggable` 的 React 移植：target 被移动、handle 起拖、
  * draggingElement 收 `pointermove` / `pointerup`），这里只补两件它不管的手势语义：
  *

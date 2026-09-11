@@ -50,8 +50,8 @@
     "react": "^19.0.0"
   },
   "dependencies": {
-    "@reaxuse/core": "catalog:",
-    "@reaxuse/integrations": "catalog:",
+    "@reause/core": "catalog:",
+    "@reause/integrations": "catalog:",
     "css-render": "catalog:",
     "idb-keyval": "catalog:"
   },

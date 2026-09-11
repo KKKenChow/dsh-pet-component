@@ -1,12 +1,12 @@
 import type { RefObject } from 'react'
-import { useMutationObserver } from '@reaxuse/core'
+import { useMutationObserver } from '@reause/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
  * 读回子组件写在 DOM 上的属性（组件会把 `data-motion` / `data-animation` / `data-look`
  * 挂在根节点上）。
  *
- * 用 reaxuse 的 `useMutationObserver` 盯属性变化，而不是自己起 `setInterval` 轮询：
+ * 用 reause 的 `useMutationObserver` 盯属性变化，而不是自己起 `setInterval` 轮询：
  * look 格只在指针真的移动时才变，事件驱动既没有 150ms 的显示延迟，也没有一直空转的
  * 定时器。观察范围是整个容器（`subtree` + `childList`），这样宠物根节点被换掉、
  * 或属性被摘掉时都能重新读到值。

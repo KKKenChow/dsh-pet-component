@@ -1,4 +1,4 @@
-import { useMediaControls } from '@reaxuse/core'
+import { useMediaControls } from '@reause/core'
 import { useEffect, useRef } from 'react'
 
 export interface MediaPlayerProps {
@@ -18,7 +18,7 @@ function formatTime(seconds: number): string {
 }
 
 /**
- * 单条动画播放器 —— reaxuse 的 `useMediaControls`（VueUse 同名 hook 的 React 移植）
+ * 单条动画播放器 —— reause 的 `useMediaControls`（VueUse 同名 hook 的 React 移植）
  * 的用法演示：换 `src` 就重播，带播放 / 暂停、进度条、倍速。
  *
  * 与宠物本体是**两条独立链路**：这里把播放状态提成 React state

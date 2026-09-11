@@ -109,10 +109,10 @@ pet.clear()                    // 撤销插播，无缝自动回落至 'working'
 | **拖拽表现** | 循环播放 `animations.drag`（被无形抓起悬空） | 根据移动方向自动切为左右行走 |
 | **走路素材** | 使用 `animations.moves`（`moving-left` / `moving-right`） | 复用同一套行走向素材 |
 
-容器推移可配合 [@reaxuse/core](https://github.com/hairyf/reaxuse) 的 `useDraggable` 使用：
+容器推移可配合 [@reause/core](https://github.com/hairyf/reause) 的 `useDraggable` 使用：
 
 ```tsx
-import { useDraggable } from '@reaxuse/core'
+import { useDraggable } from '@reause/core'
 import { useRef } from 'react'
 
 export function App() {
@@ -133,7 +133,7 @@ export function App() {
 ```
 
 > **事件拦截设计**：视频容器设置 `pointer-events: none`，仅 `.dsh-pet__hitbox` 接收指针事件。
-> **安装提示**：`@reaxuse/core` 为内部依赖，但在 strict node_modules（如 pnpm）环境中需单独显式声明安装：`pnpm add @reaxuse/core`。
+> **安装提示**：`@reause/core` 为内部依赖，但在 strict node_modules（如 pnpm）环境中需单独显式声明安装：`pnpm add @reause/core`。
 
 ### 双击交互
 
@@ -147,7 +147,7 @@ export function App() {
 * **只认双击**：单击不发任何动作，不会与状态动画、拖拽抢画面；`replay: true` 保证连按两次都能从头播。
 * **松手才落地**：命中在第二次按下的 `pointerup` 才触发；传了 `dragging` 时，窗口内一旦变成拖动就作废窗口并丢掉待定的那次 ——「点一下 → 500ms 内又拖一下」不会误播。
 * **与宿主回调共存**：内置判定叠加在你传入的 `onHitboxPointerDown` / `onHitboxPointerUp` / `onHitboxPointerCancel` 之外，宿主自己的指针回调照常收到事件。
-* **实现**：判定窗口用 [@reaxuse/core](https://github.com/hairyf/reaxuse) 的 `useStateAutoReset` 表达，见 `src/hooks/use-double-click.ts`。
+* **实现**：判定窗口用 [@reause/core](https://github.com/hairyf/reause) 的 `useStateAutoReset` 表达，见 `src/hooks/use-double-click.ts`。
 
 ---
 

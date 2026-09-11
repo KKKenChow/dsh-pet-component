@@ -1,0 +1,9 @@
+[submodule "source/dsh-pet"]
+	path = source/dsh-pet
+	url = https://github.com/PC2005-cloud/dsh-pet
+[submodule "source/deepseek-harness-desktop"]
+	path = source/deepseek-harness-desktop
+	url = https://github.com/hairyf/deepseek-harness-desktop
+[submodule "source/dsh-dafeiyu"]
+	path = source/dsh-dafeiyu
+	url = https://github.com/QCYTSN/dsh-dafeiyu

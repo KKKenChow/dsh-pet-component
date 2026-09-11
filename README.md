@@ -10,20 +10,21 @@
 
 | 协议名称 | 配置文件 | 资源文件 |
 | :--- | :--- | :--- |
-| **[DSH Pet](https://github.com/PC2005-cloud/dsh-pet)** | `assets/config.jsonc` | 逐动作透明视频（VP9-alpha `.webm` / macOS HEVC-alpha `.mov`） |
+| **[Dsh Pet](https://github.com/PC2005-cloud/dsh-pet)** | `assets/config.jsonc` | 逐动作透明视频（VP9-alpha `.webm` / macOS HEVC-alpha `.mov`） |
 | **[Codex Pet](https://github.com/Signalight/codex-to-dsh-pet)** | `pet.json` | 8 列单图雪碧图（192×208，9 行 v1 / 11 行 v2） |
 
 ---
 
 ## ✨ 核心特性
 
-- **统一入口**：根据 `config` 结构自动识别渲染器，亦可显式设置 `kind` 参数强行指定。
-- **无缝无黑帧**：内置双 `<video>` 交叉淡入缓冲机制，新动画加载完（`loadeddata`）后才切换至前台。
-- **同构动作池**：内置 14 个同构动作（覆盖 dsh-pet 的 `workStatus` 档位），集成默认循环语义。
-- **双模控制**：支持声明式（`motion` prop）与命令式（`pet.motion(...)` 插播）混合使用。
-- **智能拖拽分流**：dsh-pet 播放「悬空拽起」动画，Codex 智能切为「左右行走」模式；命中区独立安全隔离。
-- **内置双击**：命中框连按两次即插播 `waving`（dsh 取 `animations.clicks` 池，Codex 走 `waving` 行），宿主无需自己判定。
-- **跨会话缓存**：内置 IndexedDB 缓存机制（`cache` 默认开启），实现 Blob 与 Object URL 跨会话复用。
+- 🧭 **统一入口**：根据 `config` 结构自动识别渲染器，亦可显式设置 `kind` 参数强行指定。
+- 🎬 **无缝无黑帧**：内置双 `<video>` 交叉淡入缓冲机制，新动画加载完（`loadeddata`）后才切换至前台。
+- 🎭 **同构动作池**：内置 14 个同构动作（覆盖 dsh-pet 的 `workStatus` 档位），集成默认循环语义。
+- 🎮 **双模控制**：支持声明式（`motion` prop）与命令式（`pet.motion(...)` 插播）混合使用。
+- 🖱️ **智能拖拽分流**：dsh-pet 播放「悬空拽起」动画，Codex 智能切为「左右行走」模式；命中区独立安全隔离。
+- ⚡ **内置双击**：连按两次即插播 `waving`（dsh 取 `animations.clicks` 池，Codex 走 `waving` 行）
+- 💾 **跨会话缓存**：内置 IndexedDB 缓存机制（`cache` 默认开启），实现 Blob 与 Object URL 跨会话复用。
+- 🍎 **多平台适配**：macOS 自动走 HEVC-alpha 资源，其余平台走 VP9-alpha；自动探测切换，宿主无需编写任何分支逻辑。
 
 ---
 

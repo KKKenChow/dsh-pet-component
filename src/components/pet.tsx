@@ -8,7 +8,6 @@ import { useControllablePet } from '../hooks/use-controllable-pet'
 import { useDoubleClick } from '../hooks/use-double-click'
 import { useMuttering } from '../hooks/use-muttering'
 import { usePetBubbles } from '../hooks/use-pet-bubbles'
-import { aggregateBubbleMotion } from '../utils/bubble'
 import { PetBubbleLayer } from './bubble-layer'
 import { CodexPet } from './codex-pet'
 import { DshPet } from './dsh-pet'
@@ -155,7 +154,7 @@ export function Pet(props: PetProps) {
       bubbleHandleRef.current?.close(MUTTERING_BUBBLE_ID)
   }
 
-  const { bubbles, handle: bubbleHandle } = usePetBubbles({
+  const { bubbles, motion: bubbleMotion, handle: bubbleHandle } = usePetBubbles({
     onShow: dismissMuttering,
     onUpdate: dismissMuttering,
   })
@@ -166,12 +165,10 @@ export function Pet(props: PetProps) {
    * 气泡聚合出的动作 —— **声明式**交给渲染器的 `motion` prop，对齐参考实现
    * （`app.tsx` 的 `motion={dragging ? moving-* : bubble.motion}`）。
    *
-   * 之前走命令面 `pet.motion(...)`，而命令面会被任何 `motion` prop 变化清掉
-   * （`usePetMotion` 的「prop 变化重新接管」）—— 拖动、宿主换 prop 都会把气泡下发的动作
-   * 弄丢，于是才有了「动作主人」「收起时交还」「循环动作主动 clear」这一串补丁。
-   * 声明式之后没有「谁拥有动作」这回事：气泡在，动作就在；气泡收起，动作自动回落。
+   * 聚合（多会话优先级、终态脉冲窗口、100ms 合并窗口）全在
+   * `src/utils/bubble-tracker.ts` 里，且与可见气泡列表**互不影响**：气泡被上限挤掉、
+   * 被超时收起，都不会掐断动作（这正是参考实现 `sessions` 与 toast 分层的原因）。
    */
-  const bubbleMotion = aggregateBubbleMotion(bubbles)
   const effectiveMotion = bubbleMotion ?? motion
 
   // 有气泡处于加载态时**自动**碎碎念挂起（别让后台碎碎念打断正在跑的会话）；

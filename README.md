@@ -175,8 +175,8 @@ pet.bubble.clear()
 | `image` | `string` | — | 配图地址（宿主给完整 URL） |
 | `loading` | `boolean` | `false` | 显示内置 CSS 圆环（加载态） |
 | `variant` | `'default' \| 'success' \| 'warning' \| 'danger'` | `'default'` | 语义色，决定内置图标与默认收起时长 |
-| `motion` | `MotionInput` | — | 捆绑运行动画（会话档位）；组件把所有气泡的 `motion` 按优先级聚合后声明式交给 `<Pet>` |
-| `timeout` | `number` | 按语义色 | 自动收起 ms（`success` 3000 / `danger` 4000；`default`、`warning` 常驻，显式传才倒计时） |
+| `motion` | `MotionInput` | — | 会话档位；状态机按 `STATUS_PRIORITY` 表聚合（含终态脉冲窗口）后声明式交给 `<Pet>` |
+| `timeout` | `number` | 按档位 | 自动收起 ms（`success` 3000 / `failed`·`error` 4000 / `review` 2500；其余档位常驻） |
 | `placement` | `'top' \| 'bottom'` | `'top'` | 相对宠物的方向 |
 
 同时最多显示 **3 条**，超出关最旧（对齐桌面端 `MAX_VISIBLE_TOASTS`）。气泡层由 `<Pet>` 自己挂在 `.dsh-pet-shell` 上 —— `DshPet` / `CodexPet` 两个渲染器里没有任何气泡逻辑。
@@ -198,8 +198,9 @@ pet.bubble.clear()
 
 * **首拍只记基线**：挂载后第一次到点以 `reason: 'baseline'` 通知宿主，且这期间推回的文本**不会展示**（对应 dsh-pet 的 `hasBaseline`，避免启动/刷新时重放旧句子）；`mutteringImmediate` 可关掉这个行为。
 * **宿主推回才展示**：组件不持有 Promise。`pet.muttering(text, { image?, duration? })` 从 `animations.events.whisper` 整池随机抽一段动画播放（避开上一段），并弹一条 10s 气泡；这句话走 `title`（说话语气、不占图标位），配图走 `image`；池为空时回落 `mutteringMotion`（缺省 `waving` —— Codex 图集走这条）。
-* **动作是推导出来的，不是下发出去的**：组件把所有气泡的 `motion` 按优先级聚合成一个动作（表与参考实现 `bubble-tracker.ts` 的 `STATUS_PRIORITY` 一致：等待 60 > 出错 50 > 失败 45 > 待审阅 40 > 工作中 30 > 整理中 25 > 思考中 20 > 运行中 12 > 完成 10），声明式交给渲染器 —— 多会话并发时宿主不必自己算优先级；气泡在，动作就在；气泡收起，动作自动回落（成功动画会自己播完，不会因为气泡 3s 超时被掐断）。
-* **超时只给终态档**：`success` 3000 / `danger` 4000 到点自收，`default`（工作进行中）与 `warning`（等待）常驻等状态变化 —— 与参考实现的 `scheduleHide` 同规则；`review` 那种「待审阅、过一会儿收」请显式传 `timeout: 2500`。
+* **状态登记处与可见层是两层**（移植自参考实现的 `sessions` / toast 分层）：`pet.bubble({ id, motion })` 登记的档位留在状态机里，可见气泡每处最多 3 条 —— 被上限挤下去、或到点收起，都**只影响可见层**，动作照旧由登记的档位聚合。所以「三条叠加挤掉常驻的加载态」之后，加载动画仍然在（三条的终态脉冲过期后也是）。
+* **终态档有独立的保持窗口**：`success` / `error` 的气泡 3s 收起，动作还留 10s（`failed` 1.8s）让动画完整播完 —— 上游注释里记的正是「成功动画没播完就换回待机」这个报告。
+* **只有终态档会自己收起**：`success` 3000 / `failed`·`error` 4000 / `review` 2500，其余档位（工作档、等待档）常驻等状态变化；`loading: true` 一律回到 Info 档（对齐 `toastContent`：`isLoading` 只出现在 `default` 档位）。聚合下发还带 100ms 合并窗口，多会话交错时不会把动画反复切回。
 * **状态压过闲聊**：出现非碎碎念气泡时碎碎念那条立即收起；插播（空闲风味动作 / 碎碎念动画）只在**纯待机**时播，状态动作一到就接手，不必等插播播完。加载态只挡**自动**碎碎念，手动 `pet.muttering(...)` / `pet.muttering.request()` 随时可用（说话优先：会先清掉状态气泡）。
 * **配图**：开启后组件从 `config.memes` 随机抽 1 张（不让模型选），把 `{ name, desc }` 放进事件载荷供宿主拼提示词，图片 URL 由宿主给。
 * **手动触发**：`pet.muttering.request()` 立即以 `reason: 'manual'` 再索取一句，绕过周期与首拍基线。

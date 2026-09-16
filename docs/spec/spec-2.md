@@ -531,3 +531,57 @@ const effectiveMotion = bubbleMotion ?? motion        // 声明式，交给渲�
 `pointermove` 之后再也不会回到待机动画。现在加了作用半径（`lookRadius` prop，缺省
 `max(宽, 高) * CODEX_LOOK_RADIUS_FACTOR = 1.25`），出界即 `setLookIndex(undefined)` 回待机；
 另外 `pointerout`（无 `relatedTarget`，即离开整窗）与窗口 `blur` 也会清掉 look，拖动期间不参与 look。
+
+---
+
+## 16. 移植上游气泡状态机（替换 §15.1 的自研聚合）
+
+起因：回归一个接一个（上限淘汰后动作消失、终态气泡收起掐断动画、更新为警告仍自动消失），用户
+要求「直接把上游 `use-bubble.ts` / `bubble-tracker.ts` / `bubble.ts` 拿过来用，然后调整」。
+读完参考实现后确认：**我之前把两层揉成了一层**。
+
+| 层 | 参考实现 | 本仓库现在 |
+| --- | --- | --- |
+| 状态登记处（动作来源） | `bubble-tracker.ts` 的 `sessions` / `failedUntil` / `previousStatus` / `dismissed` | `src/utils/bubble-tracker.ts` 同名同义 |
+| 可见层（气泡） | HeroUI `ToastQueue` + `toast.ts` 的 `placementOrder` 淘汰 | 同文件的 `entries` / `order` |
+| React 接线 | `src/pet/hooks/use-bubble.ts`（`useListen` ×3 + `useUnmount`） | `src/hooks/use-pet-bubbles.ts`（宿主直接调 `pet.bubble`） |
+
+**为什么这样能修掉三个回归**：`statusOf()` 只从**状态登记处**聚合，可见气泡被上限挤掉
+（`evictOverflow` → `closeEntry`）、被超时收起（`scheduleHide`），都**不动** `sessions`：
+
+1. **「三条叠加挤掉加载态 → 三条消失后加载动画也没了」**：加载态的会话登记还在，`thinking`(20)
+   继续聚合 → 动画不受影响。旧版把可见条目当状态来源，条目一删动作就没了。
+2. **「原地更新为完成后气泡消失，动画也直接消失」**：终态档有独立脉冲窗口 —— `success` / `error`
+   保持 `TERMINAL_PULSE_TTL = 10000`、`failed` 1.8s；气泡按 `scheduleHide` 3s / 4s / 2.5s 各自收起，
+   二者互不影响（上游注释记的就是这个用户报告）。
+3. **「更新为警告仍自动消失」/「警告后点加载态没回到 Info」**：时长与语义色都**只看档位** ——
+   `failed`·`error` 4000 / `review` 2500 / `success` 3000，其余常驻；`loading: true` 一律回落 Info 档
+   （对齐 `toastContent`：`isLoading` 只出现在 `default` 档位）。
+
+### 16.1 移植清单（逐条对照）
+
+- `sessions` / `toastKeys`→`entries` / `previousStatus` / `failedUntil` / `consumedFailed` /
+  `dismissed` / `hideTimers` / `pulseTimers` / `pruneTimers` / `order`（placement 淘汰顺序）
+- `statusOf()`：按 `STATUS_PRIORITY` 取最高档；终态档过了脉冲窗口回落底层状态
+  （只对 `hasPulseWindow` 的三个档位生效，`review` 不参与回落）
+- `updateAgg()` + `STATUS_COALESCE_MS = 100`：trailing 合并窗口，突发多档只下发最终态一次
+- `syncToast()` → `syncBubble()`：`dismissed.has(id) || previous === current` 不再重建；原地更新；
+  转入终态档才 `scheduleHide`
+- `trackFailedPulse()` / `scheduleHide()` / `pruneSession()` + `IDLE_SESSION_RETENTION = 5000`
+- `evictOverflow()`：移植 `toast.ts` 的 `placementOrder`（每 placement 上限 3，关最旧）
+- 单测：`test/bubble-tracker.test.ts`（状态机，注入时钟与定时器）与 `test/bubble.test.ts`（纯逻辑）
+
+### 16.2 没有移植的部分（宿主专属，本组件不该有）
+
+- `sessionStatus(session)`：从 DSH 会话快照（`workStatus` / `lastAgentError` / `pendingInteraction` …）
+  推导档位 —— 我们的宿主直接给 `motion`。
+- `toastContent()` 与 `bubble.ts`（`sessionTitle` / `statusCopy` / `taskCopy` / `toolActivityGroup` /
+  `TOOL_LABELS`）：会话文案生成 —— 我们的宿主直接给 `title` / `description` / `icon` / `image`。
+- 子代理会话静默（`origin === 'subagent'`）：宿主策略 —— 宿主不建气泡即可。
+- `running → undefined` 时补一条「已完成」toast：同上，宿主用 `variant: 'success'` 表达。
+
+### 16.3 与 §15 的关系
+
+§15.1 的 `aggregateBubbleMotion()` 已被 `bubble-tracker.ts` 的 `statusOf()` 取代（同一张
+`BUBBLE_MOTION_PRIORITY` 表，多了脉冲窗口与合并窗口）；`src/utils/bubble.ts` 只留纯逻辑
+（常量、档位判定、单条条目的补齐与原地更新），不再持有聚合。

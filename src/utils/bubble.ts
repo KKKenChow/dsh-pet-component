@@ -2,47 +2,59 @@ import type { PetBubble, PetBubbleOptions, PetBubbleVariant } from '../types/bub
 import type { MotionInput, PetRenderMotion } from '../types/motion'
 
 /**
- * 气泡的纯逻辑层（与队列容器 `createBubbleQueue` 分开：这里没有定时器，可单测）。
+ * 气泡的**纯逻辑层**：常量、档位判定、单条条目的补齐与原地更新。
  *
- * 全部规则都对着 `source/deepseek-harness-desktop` 的桌宠气泡抄：
- * - 超时只给**终态**档排计时器 → `BUBBLE_DEFAULT_TIMEOUT`（对应 `bubble-tracker.ts`
- *   的 `scheduleHide`：`FAILED_BUBBLE_TIMEOUT` / `REVIEW_BUBBLE_TIMEOUT` /
- *   `SUCCESS_TOAST_TIMEOUT`）；
- * - 同时可见上限 → `MAX_VISIBLE_BUBBLES`（对应 `utils/toast.ts` 的 `MAX_VISIBLE_TOASTS`）；
- * - 多气泡聚合出的动作 → `aggregateBubbleMotion`（对应 `bubble-tracker.ts` 的
- *   `STATUS_PRIORITY` + `statusOf`）。
+ * 定时器、状态登记处与聚合在 `bubble-tracker.ts`（移植自参考实现）。这里的一切逐值
+ * 对齐 `source/deepseek-harness-desktop`：
+ *
+ * | 本文件 | 参考实现 |
+ * | --- | --- |
+ * | `MAX_VISIBLE_BUBBLES` | `src/utils/toast.ts` 的 `MAX_VISIBLE_TOASTS` |
+ * | `BUBBLE_TERMINAL_TIMEOUT` | `src/pet/utils/bubble-tracker.ts` 的 `scheduleHide` |
+ * | `BUBBLE_TERMINAL_PULSE_TTL` | 同文件的 `FAILED_PULSE_TTL` / `TERMINAL_PULSE_TTL` |
+ * | `BUBBLE_MOTION_PRIORITY` | 同文件的 `STATUS_PRIORITY` |
  */
 
-/**
- * 各语义色的默认自动收起时长 ms（`0` = 常驻，等状态自己变化）。
- *
- * 表按参考实现的 `scheduleHide` 反推 —— **只有终态档才排收起计时器**：
- *
- * | 语义色 | 参考实现里的状态 | 时长 |
- * | --- | --- | --- |
- * | `success` | `success`（已完成） | 3000 |
- * | `danger` | `failed` / `error`（失败 / 出错） | 4000 |
- * | `warning` | `waiting`（等待，优先级 60 的常驻档） | 0 |
- * | `default` | `running` / `thinking` / `working` / `result` | 0 |
- *
- * 参考实现里唯一带计时器的 warning 是 `review`（`REVIEW_BUBBLE_TIMEOUT = 2500`）：
- * 需要「待审阅、过一会儿自己收」的语义时，显式传 `timeout: 2500`。
- */
-export const BUBBLE_DEFAULT_TIMEOUT: Record<PetBubbleVariant, number> = {
-  default: 0,
-  success: 3000,
-  warning: 0,
-  danger: 4000,
-}
-
-/** 同时可见上限：超出即关最旧（对齐 desktop `MAX_VISIBLE_TOASTS = 3` 与它的淘汰逻辑）。 */
+/** 同时可见上限：超出即关最旧（对齐 `MAX_VISIBLE_TOASTS = 3` 与它的淘汰逻辑）。 */
 export const MAX_VISIBLE_BUBBLES = 3
 
 /**
- * 聚合优先级表 —— 与 `bubble-tracker.ts` 的 `STATUS_PRIORITY` 逐值一致
- * （等待 60 > 出错 50 > 失败 45 > 待审阅 40 > 工作中 30 > 整理中 25 > 思考中 20 >
- * 运行中 12 > 完成 10 > 空闲 0）。`dragging` 是手势态、正常不会出现在气泡上，
- * 给个中间值只是为了「真有人这么传」时行为可预期。
+ * **终态档**的自动收起时长 ms（对齐参考实现的 `scheduleHide`）：
+ * `failed` / `error` 4000、`review` 2500、`success` 3000；其余档位不在表里 = 常驻，
+ * 等状态自己变化（工作档位、等待档都是这样）。
+ *
+ * 注意：**只有终态档才排计时器** —— 这正是「更新为警告（等待档）不该自动消失」的根据。
+ */
+export const BUBBLE_TERMINAL_TIMEOUT: Partial<Record<PetRenderMotion, number>> = {
+  failed: 4000,
+  error: 4000,
+  review: 2500,
+  success: 3000,
+}
+
+/**
+ * **终态档的聚合保持窗口** ms（对齐参考实现的 `trackFailedPulse`）：气泡收起之后，
+ * 动作还要多留一会儿，让动画完整播完。
+ *
+ * 上游注释原文（同一份用户报告）：成功终态动画（如雀跃庆祝）实际播放时长超过
+ * `SUCCESS_TOAST_TIMEOUT`(3s)，聚合状态提前回落会让动画被掐在半截。所以：
+ * `success` / `error` 保持 `TERMINAL_PULSE_TTL = 10000`，`failed` 用
+ * `FAILED_PULSE_TTL = 1800`（失败动画很短，不需要 10s）。
+ *
+ * 气泡自身仍按 `BUBBLE_TERMINAL_TIMEOUT` 独立收起，二者互不影响。
+ */
+export const BUBBLE_TERMINAL_PULSE_TTL: Partial<Record<PetRenderMotion, number>> = {
+  failed: 1800,
+  error: 10000,
+  success: 10000,
+}
+
+/**
+ * 聚合优先级（对齐 `STATUS_PRIORITY`）：数值越大越优先，同档取先登记的会话。
+ *
+ * `dragging` 是手势态、正常不会出现在气泡上，给个中间值只是为了「真有人这么传」时
+ * 行为可预期；`waving` / `turn` / `moving-*` / `idle` 为 0 = 不驱动动作
+ * （与参考实现一致：0 档等于「没有会话状态」）。
  */
 export const BUBBLE_MOTION_PRIORITY: Record<PetRenderMotion, number> = {
   'waiting': 60,
@@ -63,97 +75,145 @@ export const BUBBLE_MOTION_PRIORITY: Record<PetRenderMotion, number> = {
 }
 
 /**
- * 解析自动收起时长。
- *
- * 显式 `timeout` 优先：非正数 / 非数字一律当 `0`（常驻）—— 与 dsh-pet 对
- * `eventsRefreshSec` 非法值的处置同思路：不猜、不兜成随机时长。
+ * 会「自己收起 + 需要多留一会儿」的档位（参考实现的 `isTerminal`）：
+ * `failed` / `review` / `error` / `success`。
  */
-export function resolveBubbleTimeout(variant: PetBubbleVariant, timeout?: number): number {
-  if (timeout !== undefined)
-    return Number.isFinite(timeout) && timeout > 0 ? timeout : 0
-  return BUBBLE_DEFAULT_TIMEOUT[variant]
+const TERMINAL_MOTIONS: readonly PetRenderMotion[] = ['failed', 'review', 'error', 'success']
+
+/**
+ * 有**脉冲窗口**的档位（参考实现 `trackFailedPulse` 里判断的那三个）：
+ * `failed` / `error` / `success`。注意 `review` 不在其中 —— 它照常参与聚合，
+ * 只是气泡自己 2.5s 收起。
+ */
+const PULSE_MOTIONS: readonly PetRenderMotion[] = ['failed', 'error', 'success']
+
+/** 归一化动作入参到动作名（去掉 `{ type, loop, replay }` 这层形状）。 */
+export function motionType(input: MotionInput | undefined): PetRenderMotion | undefined {
+  if (input === undefined)
+    return undefined
+  return typeof input === 'string' ? input : input.type
+}
+
+/**
+ * 动作的语义指纹（动作名 + 归一后的循环语义；忽略 `replay`）。
+ *
+ * 用它比较「档位变没变」：`'thinking'` 与 `{ type: 'thinking' }` 等价，宿主每次传新
+ * 对象字面量也不会被当成换档。
+ */
+export function motionKey(input: MotionInput | undefined): string | undefined {
+  if (input === undefined)
+    return undefined
+  if (typeof input === 'string')
+    return input
+  return input.loop === undefined ? input.type : `${input.type}:${String(input.loop)}`
+}
+
+/** 是不是终态档（会自己收起、需要多留一会儿）。 */
+export function isTerminalMotion(input: MotionInput | undefined): boolean {
+  const type = motionType(input)
+  return type !== undefined && TERMINAL_MOTIONS.includes(type)
+}
+
+/** 终态档的自动收起时长；非终态（含未给动作）返回 `undefined` = 常驻。 */
+export function terminalTimeoutOf(input: MotionInput | undefined): number | undefined {
+  const type = motionType(input)
+  return type === undefined ? undefined : BUBBLE_TERMINAL_TIMEOUT[type]
+}
+
+/** 终态档的聚合保持窗口 ms；无窗口返回 0。 */
+export function terminalPulseTtlOf(input: MotionInput | undefined): number {
+  const type = motionType(input)
+  return type === undefined ? 0 : (BUBBLE_TERMINAL_PULSE_TTL[type] ?? 0)
+}
+
+/** 有脉冲窗口的档位（`statusOf` 的终态回落只对这三个生效）。 */
+export function hasPulseWindow(input: MotionInput | undefined): boolean {
+  const type = motionType(input)
+  return type !== undefined && PULSE_MOTIONS.includes(type)
+}
+
+/**
+ * 解析自动收起时长：
+ *
+ * 1. 宿主显式给了 `timeout` → 用它（非正数 / 非数字一律当 `0` 常驻，不猜一个随机时长）；
+ * 2. 否则按**动作档位**（= 状态，参考实现里 variant 也是由状态推导的，所以这里不看
+ *    `variant`）取终态档时长；
+ * 3. 都不成立 → `0`（常驻）。
+ */
+export function resolveBubbleTimeout(input: { motion?: MotionInput, timeout?: number }): number {
+  if (input.timeout !== undefined)
+    return Number.isFinite(input.timeout) && input.timeout > 0 ? input.timeout : 0
+  return terminalTimeoutOf(input.motion) ?? 0
+}
+
+/**
+ * 语义色：显式给的优先；否则**加载态一律是 `default`（Info）**。
+ *
+ * 对齐参考实现的 `toastContent`：`isLoading` 只出现在 `running` / `thinking` /
+ * `working` / `result` 这几档，而它们的 `variant` 全是 `default`。所以「更新为警告后
+ * 再点加载态」必须回到 Info，而不是带着 warning（否则会按 review 的时长自己消失）。
+ */
+export function resolveBubbleVariant(
+  loading: boolean,
+  explicit: PetBubbleVariant | undefined,
+  fallback: PetBubbleVariant,
+): PetBubbleVariant {
+  if (explicit !== undefined)
+    return explicit
+  return loading ? 'default' : fallback
 }
 
 /** 补齐默认值，生成一条入队气泡。 */
 export function createBubble(options: PetBubbleOptions, id: string, created: number): PetBubble {
-  const variant = options.variant ?? 'default'
+  const loading = options.loading === true
   return {
     id,
     title: options.title,
     description: options.description,
     icon: options.icon,
     image: options.image,
-    loading: options.loading === true,
-    variant,
+    loading,
+    variant: resolveBubbleVariant(loading, options.variant, 'default'),
     motion: options.motion,
     placement: options.placement ?? 'top',
     kind: options.kind ?? 'bubble',
-    duration: resolveBubbleTimeout(variant, options.timeout),
+    duration: resolveBubbleTimeout({ motion: options.motion, timeout: options.timeout }),
     created,
   }
 }
 
 /**
- * 原地更新一条气泡：只换**本次显式给出**的字段。
+ * 原地更新一条气泡：只换**本次显式给出**的字段（`id` / `created` 不变），等价于参考
+ * 实现的 `toast.update(key, content)`。
  *
- * - `id` / `created` 恒定不变（排序与稳定 key 不因为更新而变）；
- * - 字段给了才改（`undefined` = 保持原值）；
- * - `timeout` **只有显式给**才重算时长并重排计时 —— 这就是「可更新文字」不打断
- *   自动收起的原因，与 desktop `toast.update(key, content)` 的原地更新同义。
+ * 时长重算规则（对应参考实现「只在**转入**终态档时 `scheduleHide`」）：
+ * 1. 显式给 `timeout` → 按它重算；
+ * 2. 没给但**动作档位变了** → 按新档位重算（于是「加载态 → 完成」会 3s 后自己收，
+ *    而「更新为警告（等待档）」不会莫名开始倒计时）；
+ * 3. 都没变 → 保持原时长，所以「原地换文字」不会重置自动收起。
  */
 export function updateBubble(previous: PetBubble, options: PetBubbleOptions): PetBubble {
-  const variant = options.variant ?? previous.variant
+  // 「显式 `undefined` = 清除」：与 `createBubbleTracker.show()` 的会话快照合并（spread）
+  // 保持同一套语义，于是 `pet.muttering(text, { image: undefined })` 能真的把配图清掉。
+  const merged = { ...previous, ...options }
+  const loading = merged.loading === true
+  const motion = merged.motion
   return {
-    ...previous,
-    title: options.title ?? previous.title,
-    description: options.description ?? previous.description,
-    icon: options.icon ?? previous.icon,
-    image: options.image ?? previous.image,
-    loading: options.loading ?? previous.loading,
-    variant,
-    motion: options.motion ?? previous.motion,
-    placement: options.placement ?? previous.placement,
-    duration: resolveUpdatedDuration(previous, options, variant),
+    ...merged,
+    id: previous.id,
+    created: previous.created,
+    loading,
+    variant: resolveBubbleVariant(loading, options.variant, previous.variant),
+    placement: merged.placement ?? previous.placement,
+    kind: merged.kind ?? previous.kind,
+    duration: resolveUpdatedDuration(previous, options, motion),
   }
 }
 
-/**
- * 原地更新时的时长规则（对应参考实现的 `scheduleHide`：**转入**终态档才排计时器）：
- *
- * 1. 显式给 `timeout` → 按它重算（`0` = 改回常驻）；
- * 2. 没给但**语义色变了** → 按新语义色的默认时长重算 —— 「加载态（`default`，常驻）
- *    原地更新为完成（`success`）」因此会在 3s 后自己收；而更新为 `warning`（等待档，
- *    默认常驻）不会莫名其妙开始倒计时；
- * 3. 两者都没有 → 保持原时长，所以「原地换文字」不会重置自动收起。
- */
-function resolveUpdatedDuration(previous: PetBubble, options: PetBubbleOptions, variant: PetBubbleVariant): number {
+function resolveUpdatedDuration(previous: PetBubble, options: PetBubbleOptions, motion: MotionInput | undefined): number {
   if (options.timeout !== undefined)
-    return resolveBubbleTimeout(variant, options.timeout)
-  if (variant !== previous.variant)
-    return resolveBubbleTimeout(variant)
+    return resolveBubbleTimeout({ timeout: options.timeout })
+  if (motionKey(motion) !== motionKey(previous.motion))
+    return resolveBubbleTimeout({ motion })
   return previous.duration
-}
-
-/**
- * 多气泡**聚合**出的动作（`undefined` = 没有气泡要驱动动作，回落 `motion` prop）。
- *
- * 取优先级最高的一条 —— 表见 `BUBBLE_MOTION_PRIORITY`，与参考实现的 `statusOf`
- * 同表同规则（`>` 比较，所以同档位取先入队的那条）。聚合规则放在组件里，宿主就
- * 不必自己算「哪条气泡该驱动动画」：把每条会话的状态灌进 `pet.bubble({ id, motion })`
- * 即可，多会话并发时的优先级由这里统一决定。
- */
-export function aggregateBubbleMotion(bubbles: readonly PetBubble[]): MotionInput | undefined {
-  let best: MotionInput | undefined
-  let bestPriority = -1
-  for (const bubble of bubbles) {
-    if (bubble.motion === undefined)
-      continue
-    const type = typeof bubble.motion === 'string' ? bubble.motion : bubble.motion.type
-    const priority = BUBBLE_MOTION_PRIORITY[type] ?? 0
-    if (priority > bestPriority) {
-      bestPriority = priority
-      best = bubble.motion
-    }
-  }
-  return best
 }

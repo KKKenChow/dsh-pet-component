@@ -815,3 +815,151 @@ export function supportsIdleRoll(config: DshPetConfig | null | undefined): boole
 function finiteOr(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
+
+/* -------------------------------------------------------------------------- */
+/* 碎碎念（whisper）与配图                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * 碎碎念气泡的默认展示时长 ms —— 与 dsh-pet `client/pet.ts` 的
+ * `BUBBLE_DURATION_MS = 10 * 1000` 一致：到点自动收起、与动画生命周期解耦
+ * （动画被点击/拖拽打断也不影响气泡按时消失）。
+ */
+export const MUTTERING_DURATION_MS = 10_000
+
+/**
+ * 碎碎念周期缺省值（秒）：配置没写 `eventsRefreshSec.whisper` 时用它。
+ *
+ * 上游现役配置里是 300（`dsh-pet/assets/config.jsonc`），而它的客户端在配置缺失时
+ * 回落到 3600（`dsh-pet/src/client/pet.ts` 的 `?? 3600`）—— 这里沿用同一个回落值，
+ * 避免组件比上游更激进地打模型。
+ */
+export const MUTTERING_FALLBACK_INTERVAL_SEC = 3600
+
+/** 碎碎念最小周期（秒）：对应 dsh-pet 客户端的 `Math.max(1000, sec * 1000)`。 */
+export const MUTTERING_MIN_INTERVAL_SEC = 1
+
+/** 一次碎碎念的运行参数（已按 `prop > pets[i] > 顶层 > 缺省` 收敛）。 */
+export interface MutteringPlan {
+  /** 是否启用自动碎碎念 */
+  enabled: boolean
+  /** 配置里的宠物 id（进事件载荷） */
+  petId?: string
+  /** system 提示词（`whisperPrompt`）；无配置时是空串 */
+  prompt: string
+  /** 生效周期（秒，已钳制） */
+  intervalSec: number
+  /** 生效周期（ms，`intervalSec * 1000`） */
+  intervalMs: number
+  /** 是否抽配图 */
+  image: boolean
+  /** 首拍是否即索取（`false` = 对齐 dsh-pet「首拍只记基线」） */
+  immediate: boolean
+  /** 气泡展示时长 ms */
+  duration: number
+}
+
+/** `resolveMutteringPlan` 的入参：配置 + 宠物条目 + 组件 props 覆盖。 */
+export interface MutteringPlanInput {
+  config?: DshPetConfig | null
+  entry?: DshPetEntry | null
+  /** `muttering` prop（`undefined` = 回落 `pets[i].whisperEnabled`） */
+  enabled?: boolean
+  /** `mutteringPrompt` prop */
+  prompt?: string
+  /** `mutteringIntervalSec` prop（秒） */
+  intervalSec?: number
+  /** `mutteringImmediate` prop */
+  immediate?: boolean
+  /** `mutteringImage` prop（`undefined` = 回落 `whisperImageEnabled`） */
+  image?: boolean
+  /** `mutteringDuration` prop（ms） */
+  duration?: number
+}
+
+/**
+ * 收敛碎碎念的运行参数。
+ *
+ * | 字段 | prop | 宠物条目 | 顶层配置 | 缺省 |
+ * | --- | --- | --- | --- | --- |
+ * | 开关 | `muttering` | `pets[i].whisperEnabled` | — | `false` |
+ * | 提示词 | `mutteringPrompt` | — | `whisperPrompt` | `''` |
+ * | 周期 | `mutteringIntervalSec` | `pets[i].eventsRefreshSec.whisper` | `eventsRefreshSec.whisper` | 3600 |
+ * | 配图 | `mutteringImage` | — | `whisperImageEnabled` | `false` |
+ * | 首拍即索取 | `mutteringImmediate` | — | — | `false` |
+ * | 展示时长 | `mutteringDuration` | — | — | 10000 |
+ *
+ * 开关缺省 `false` 是照抄上游语义：`pets[].whisperEnabled` 缺省关闭，注释写明原因是
+ * 「后台碎碎念会顶掉正在跑的任务的 KV cache（与 DSH 多子代理同因）」。
+ */
+export function resolveMutteringPlan(input: MutteringPlanInput): MutteringPlan {
+  const { config, entry } = input
+  const intervalSec = clampIntervalSec(
+    firstNumber(input.intervalSec, entry?.eventsRefreshSec?.whisper, config?.eventsRefreshSec?.whisper),
+  )
+  const duration = firstNumber(input.duration) ?? MUTTERING_DURATION_MS
+  return {
+    enabled: input.enabled ?? entry?.whisperEnabled ?? false,
+    petId: entry?.id,
+    prompt: firstString(input.prompt, config?.whisperPrompt) ?? '',
+    intervalSec,
+    intervalMs: intervalSec * 1000,
+    image: input.image ?? config?.whisperImageEnabled ?? false,
+    immediate: input.immediate ?? false,
+    duration: duration > 0 ? duration : MUTTERING_DURATION_MS,
+  }
+}
+
+/**
+ * 抽一张表情包（`name` = `config.memes` 的键，`desc` = 描述）。
+ *
+ * 与 dsh-pet 一致：碎碎念**随机抽**而不是让模型选 —— 碎碎念没有上下文可选
+ * （人设固定、无用户输入），交模型「选」只能盲选且多了幻觉风险
+ * （`source/dsh-pet/dsh-pet/src/host/whisper.ts` 的设计注释）。
+ */
+export function pickMeme(
+  memes: Record<string, string> | undefined,
+  random: () => number = Math.random,
+): { name: string, desc: string } | undefined {
+  if (memes == null)
+    return undefined
+  const names = Object.keys(memes).filter(name => name.trim() !== '')
+  const name = pick(names, undefined, random)
+  return name === undefined ? undefined : { name, desc: memes[name] ?? '' }
+}
+
+/**
+ * 抽一段碎碎念动画：`animations.events.whisper` **整池**等概率随机 1 段，避开当前
+ * 正播的那段（避免连续重复）—— 与 dsh-pet `client/pet.ts` 的 `triggerWhisper` 一致。
+ * 池为空返回 `undefined`，调用方回落 `waving`（Codex 图集就没有 whisper 行）。
+ */
+export function pickWhisperAnimation(
+  animations: DshPetAnimations | undefined,
+  previous?: string,
+  random: () => number = Math.random,
+): string | undefined {
+  return pick(dshEventPool(animations, 'whisper'), previous, random)
+}
+
+function firstString(...values: (string | undefined)[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim() !== '')
+      return value
+  }
+  return undefined
+}
+
+function firstNumber(...values: (number | undefined)[]): number | undefined {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value))
+      return value
+  }
+  return undefined
+}
+
+/** 周期钳制：缺失/非法回落缺省，且不小于 1 秒（dsh-pet `Math.max(1000, sec * 1000)`）。 */
+function clampIntervalSec(value: number | undefined): number {
+  if (value === undefined || value <= 0)
+    return MUTTERING_FALLBACK_INTERVAL_SEC
+  return Math.max(MUTTERING_MIN_INTERVAL_SEC, value)
+}

@@ -85,6 +85,7 @@ export function DshPet(props: DshPetProps) {
     onAnimationChange,
     onReady,
     onError,
+    adHocAnimation,
     ref,
   } = props
 
@@ -137,6 +138,21 @@ export function DshPet(props: DshPetProps) {
   const adHocSeqRef = useRef(0)
   const adHocRef = useRef(adHoc)
   adHocRef.current = adHoc
+
+  // 外部一次性插播：碎碎念取的是 `animations.events.whisper` 整池里的**动画名**，不是
+  // 14 个动作之一，走不了 `motion` 的解析链（`resolveDshAnimation` 只吃动作）——
+  // 所以复用与空闲掷骰同一条播放通道，`seq` 变化即插播一次。
+  const externalSeq = adHocAnimation?.seq ?? 0
+  const externalName = adHocAnimation?.name
+  const consumedExternalRef = useRef(0)
+  useEffect(() => {
+    if (externalName === undefined || externalSeq === 0 || externalSeq === consumedExternalRef.current)
+      return
+    consumedExternalRef.current = externalSeq
+    adHocSeqRef.current += 1
+    // eslint-disable-next-line react/set-state-in-effect -- 外部插播是命令式的（seq 变化即播一次），没有可以把它变成受控状态的入口
+    setAdHoc({ pick: { name: externalName, motion: 'idle' }, seq: adHocSeqRef.current })
+  }, [externalName, externalSeq])
 
   // 空闲掷骰链：配置给了权重或分类池就开启（dsh-pet 的动画链语义）
   const idleRollEnabled = config !== null && supportsIdleRoll(config)

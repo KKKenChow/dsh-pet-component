@@ -88,8 +88,16 @@ export interface DshPetEntry {
   /** 宽度 px（高 = 宽 × 9/16） */
   size?: number
   balanceEnabled?: boolean
+  /**
+   * 该条目是否启用碎碎念。
+   *
+   * 上游缺省 `false`，注释写明原因是「后台碎碎念会顶掉正在跑的任务的 KV cache
+   * （与 DSH 多子代理同因）」—— 组件沿用同一缺省，`muttering` prop 可显式覆盖。
+   */
   whisperEnabled?: boolean
   workStatusEnabled?: boolean
+  /** 条目级事件刷新周期（秒；覆盖顶层 `eventsRefreshSec`） */
+  eventsRefreshSec?: Record<string, number>
   display?: PetDisplay
   position?: { corner: PetCorner, marginX: number, marginY: number }
 }
@@ -132,8 +140,33 @@ export interface DshPetConfig {
   pets?: DshPetEntry[]
   /** 默认宽度 px（`size` prop 与 `pets[i].size` 都缺省时使用） */
   size?: number
+  /**
+   * 碎碎念人设（system 提示词，全局唯一，所有启用碎碎念的宠物共用）。
+   *
+   * 组件只把它交给宿主（`onMuttering(prompt, …)`），生成由宿主完成 —— 与 dsh-pet
+   * 把 `whisperPrompt` 交给 host 的 `generateWhisper(ctx, system, meme)` 同分工。
+   */
   whisperPrompt?: string
+  /** 对话记忆轮数（本组件不读，保留字段用于协议完整性） */
   chatMemoryRounds?: number
+  /**
+   * 碎碎念是否配图（全局，缺省 `false`）。
+   *
+   * 开启后组件从 {@link DshPetConfig.memes} 随机抽 1 张，把 `{ name, desc }` 放进
+   * `onMuttering` 的事件载荷（宿主据此拼提示词），并在气泡里展示宿主给出的图片 URL。
+   */
+  whisperImageEnabled?: boolean
+  /** 对话是否配图（本组件不读，保留字段用于协议完整性） */
+  chatImageEnabled?: boolean
+  /**
+   * 表情包映射：**键 = `assets/memes/<键>.png` 的文件名（不含扩展名），值 = 该图内容简述**
+   * （dsh-pet `assets/config.jsonc` 的 `memes` 段）。
+   *
+   * 组件只用键来做「随机抽 1 张」并把 `{ name, desc }` 交给宿主；图片地址由宿主给
+   * （组件不假设 `/dsh-pet-7340/pic/memes/<名>.png` 这条路径 —— 那是宿主路由的事）。
+   */
+  memes?: Record<string, string>
+  /** 系统通知总开关（本组件不读，保留字段用于协议完整性） */
   notificationsEnabled?: boolean
 }
 

@@ -1,4 +1,4 @@
-import type { MotionInput, PetAnimationInfo, PetRef, PetRenderMotion } from 'dsh-pet-component'
+import type { MotionInput, PetAnimationInfo, PetBubbleOptions, PetMutteringEvent, PetRef, PetRenderMotion } from 'dsh-pet-component'
 import {
   Pet,
   useConfig,
@@ -57,6 +57,22 @@ const COMMANDS: { label: string, input: MotionInput, code: string }[] = [
   { label: '手势态：被抓起', input: { type: 'dragging' }, code: `pet.motion({ type: 'dragging' })` },
 ]
 
+/** 碎碎念的本地假生成器 —— playground 里没有模型，用固定句子演示「宿主生成 → 推回」的合约。 */
+const WHISPERS = [
+  '今天风好大',
+  '键盘有点油了，擦擦吧',
+  '要不要喝口水',
+  '窗外好像有只鸟',
+  '代码写完了吗',
+]
+
+/** dsh-pet 仓库里的表情包目录（`config.jsonc` 的 `memes` 键就是这里的文件名）。 */
+const MEME_BASE = 'https://raw.githubusercontent.com/PC2005-cloud/dsh-pet/refs/heads/main/dsh-pet/assets/memes'
+
+/** 气泡演示用的固定 id 与标题：同一个 id 下发两次就是「原地更新」。 */
+const BUBBLE_DEMO_ID = 'demo'
+const BUBBLE_TITLE = '会话示例'
+
 /**
  * 桌宠组件的唯一演示 —— **只用一个 `<Pet>`**，全部能力都在这一个组件里：
  *
@@ -92,6 +108,8 @@ export function PetDemo() {
   const [animation, setAnimation] = useState<PetAnimationInfo | null>(null)
   const [status, setStatus] = useState('等待资源…')
   const [lastCommand, setLastCommand] = useState('—')
+  const [mutteringOn, setMutteringOn] = useState(false)
+  const [memeOn, setMemeOn] = useState(true)
 
   // 配置回显（与 `Pet` 共用同一份配置缓存，不会重复拉取）
   const { config, loading, error: configError } = useConfig(asset.config)
@@ -124,6 +142,24 @@ export function PetDemo() {
   const runCommand = useCallback((input: MotionInput, label?: string) => {
     pet.motion(input)
     setLastCommand(label ?? JSON.stringify(input))
+  }, [pet])
+
+  /** 气泡：同 id 再下发 = 原地更新（演示「可更新文字 + 加载态 + 语义色 + 捆绑动画」）。 */
+  const runBubble = useCallback((options: PetBubbleOptions) => {
+    pet.bubble(options)
+    setLastCommand(`pet.bubble(${options.id ?? '自增 id'})`)
+  }, [pet])
+
+  /**
+   * 碎碎念合约：组件只通知「该要一句了」，生成在宿主侧。
+   * playground 没有模型，这里用本地假句子演示 —— 生成完调 `pet.muttering(text)` 推回。
+   */
+  const handleMuttering = useCallback((_prompt: string, event: PetMutteringEvent) => {
+    window.setTimeout(() => {
+      const text = WHISPERS[Math.floor(Math.random() * WHISPERS.length)] ?? '你好呀'
+      const name = event.meme?.name
+      pet.muttering(text, name === undefined ? undefined : { image: `${MEME_BASE}/${name}.png` })
+    }, 400)
   }, [pet])
 
   // 拖动机械部分用库里的 useDraggable；handle 是组件的 hitboxRef（命中框），
@@ -175,6 +211,11 @@ export function PetDemo() {
                 onHitboxPointerDown={drag.onHitboxPointerDown}
                 onHitboxPointerUp={drag.onHitboxPointerUp}
                 onHitboxPointerCancel={drag.onHitboxPointerUp}
+                muttering={mutteringOn}
+                mutteringImage={memeOn}
+                mutteringIntervalSec={15}
+                mutteringImmediate
+                onMuttering={handleMuttering}
                 onMotionChange={setCurrent}
                 onAnimationChange={setAnimation}
                 onReady={() => setStatus('就绪')}
@@ -332,6 +373,105 @@ export function PetDemo() {
               >
                 pet.clear()
               </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="motion-bar__title">
+              气泡 · pet.bubble(...)（同 id 再次下发 = 原地更新；同时最多 3 条，超出关最旧）
+            </p>
+            <div className="actions actions--wrap">
+              <button
+                type="button"
+                className="btn"
+                title="pet.bubble({ id, title, description, loading: true, motion: 'thinking' })"
+                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '正在分析代码…', loading: true, motion: 'thinking' })}
+              >
+                气泡：加载态
+              </button>
+              <button
+                type="button"
+                className="btn"
+                title="同一个 id 再下发：原地更新，不重新淡入、不重置收起计时"
+                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '分析完成：改了 3 个文件', loading: false, variant: 'success', motion: 'success' })}
+              >
+                原地更新为完成
+              </button>
+              <button
+                type="button"
+                className="btn"
+                title="语义色 + 图标 + 2.5s 自动收起"
+                onClick={() => runBubble({ id: 'warn', title: '需要注意', description: '余额只剩 12%', icon: '!', variant: 'warning', timeout: 2500 })}
+              >
+                警告气泡
+              </button>
+              <button
+                type="button"
+                className="btn"
+                title="连发三条：演示叠加与上限淘汰"
+                onClick={() => {
+                  runBubble({ id: 'demo-1', title: '会话 A', description: '正在检索', loading: true, motion: 'thinking' })
+                  runBubble({ id: 'demo-2', title: '会话 B', description: '等待确认', variant: 'warning', icon: '!' })
+                  runBubble({ id: 'demo-3', title: '会话 C', description: '已完成', variant: 'success', icon: '✓', motion: 'success' })
+                }}
+              >
+                三条叠加
+              </button>
+              <button
+                type="button"
+                className="btn"
+                title="pet.bubble.close(id) / pet.bubble.clear()"
+                onClick={() => {
+                  pet.bubble.clear()
+                  setLastCommand('pet.bubble.clear()')
+                }}
+              >
+                pet.bubble.clear()
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="motion-bar__title">
+              碎碎念 · muttering（组件管节拍，宿主管生成；首拍只记基线，勾「立即」可跳过）
+            </p>
+            <div className="actions actions--wrap">
+              <button
+                type="button"
+                className="btn"
+                title="宿主直接推一句：pet.muttering('…')"
+                onClick={() => {
+                  pet.muttering('这是宿主直接推来的一句')
+                  setLastCommand('pet.muttering(text)')
+                }}
+              >
+                直接展示一句
+              </button>
+              <button
+                type="button"
+                className="btn"
+                title="pet.muttering.request()：立即向宿主再要一句（reason: 'manual'）"
+                onClick={() => {
+                  pet.muttering.request()
+                  setLastCommand('pet.muttering.request()')
+                }}
+              >
+                立即要一句
+              </button>
+            </div>
+            <div className="controls">
+              <Switch
+                label="自动碎碎念（15s 一拍，宿主用本地假句子生成）"
+                checked={mutteringOn}
+                onChange={setMutteringOn}
+                hint="勾上立刻索取第一句；之后每 15 秒一拍，生成完由宿主调 pet.muttering(text) 推回"
+              />
+              <Switch
+                label="碎碎念配图（config.memes 随机抽 1 张）"
+                checked={memeOn}
+                onChange={setMemeOn}
+                hint="覆盖远端配置里的 whisperImageEnabled；图片路径由宿主按 config.memes 的键拼"
+              />
             </div>
           </div>
 

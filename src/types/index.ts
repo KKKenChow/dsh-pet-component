@@ -1,4 +1,17 @@
 export type {
+  PetBubble,
+  PetBubbleHandle,
+  PetBubbleKind,
+  PetBubbleOptions,
+  PetBubblePlacement,
+  PetBubbleVariant,
+  PetMutteringEvent,
+  PetMutteringHandle,
+  PetMutteringHandler,
+  PetMutteringReason,
+  PetMutteringShowOptions,
+} from './bubble'
+export type {
   AnimationSlot,
   Category,
   CodexPetConfig,

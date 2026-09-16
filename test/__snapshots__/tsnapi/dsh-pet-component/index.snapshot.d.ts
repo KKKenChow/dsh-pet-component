@@ -47,6 +47,9 @@ export interface DshPetConfig {
   size?: number;
   whisperPrompt?: string;
   chatMemoryRounds?: number;
+  whisperImageEnabled?: boolean;
+  chatImageEnabled?: boolean;
+  memes?: Record<string, string>;
   notificationsEnabled?: boolean;
 }
 export interface DshPetEntry {
@@ -56,6 +59,7 @@ export interface DshPetEntry {
   balanceEnabled?: boolean;
   whisperEnabled?: boolean;
   workStatusEnabled?: boolean;
+  eventsRefreshSec?: Record<string, number>;
   display?: PetDisplay;
   position?: {
     corner: PetCorner;
@@ -76,12 +80,66 @@ export interface MoveSpec {
   name: string;
   params?: Record<string, number>;
 }
+export interface MutteringPlan {
+  enabled: boolean;
+  petId?: string;
+  prompt: string;
+  intervalSec: number;
+  intervalMs: number;
+  image: boolean;
+  immediate: boolean;
+  duration: number;
+}
+export interface MutteringPlanInput {
+  config?: DshPetConfig | null;
+  entry?: DshPetEntry | null;
+  enabled?: boolean;
+  prompt?: string;
+  intervalSec?: number;
+  immediate?: boolean;
+  image?: boolean;
+  duration?: number;
+}
 export interface PetAnimationInfo {
   name: string;
   once: boolean;
   src: string | null;
   row?: number;
   column?: number;
+}
+export interface PetBubble {
+  id: string;
+  title?: ReactNode;
+  description?: ReactNode;
+  icon?: ReactNode;
+  image?: string;
+  loading: boolean;
+  variant: PetBubbleVariant;
+  motion?: MotionInput;
+  restore: boolean;
+  placement: PetBubblePlacement;
+  kind: PetBubbleKind;
+  duration: number;
+  created: number;
+}
+export interface PetBubbleHandle {
+  (_: PetBubbleOptions): string;
+  close: (_?: string) => void;
+  clear: () => void;
+}
+export interface PetBubbleOptions {
+  id?: string;
+  title?: ReactNode;
+  description?: ReactNode;
+  icon?: ReactNode;
+  image?: string;
+  loading?: boolean;
+  variant?: PetBubbleVariant;
+  motion?: MotionInput;
+  restore?: boolean;
+  timeout?: number;
+  placement?: PetBubblePlacement;
+  kind?: PetBubbleKind;
 }
 export interface PetCommonProps extends PetHitboxProps {
   ref?: Ref<PetRef | null>;
@@ -109,6 +167,23 @@ export interface PetHitboxProps {
   onHitboxPointerUp?: (_: PointerEvent<HTMLDivElement>) => void;
   onHitboxPointerCancel?: (_: PointerEvent<HTMLDivElement>) => void;
 }
+export interface PetMutteringEvent {
+  petId?: string;
+  reason: PetMutteringReason;
+  intervalSec: number;
+  meme?: {
+    name: string;
+    desc: string;
+  };
+}
+export interface PetMutteringHandle {
+  (_: string, _?: PetMutteringShowOptions): void;
+  request: () => void;
+}
+export interface PetMutteringShowOptions {
+  image?: string;
+  duration?: number;
+}
 export interface PetProps extends PetCommonProps {
   kind?: 'dsh' | 'codex';
   config: string | PetConfig;
@@ -122,11 +197,21 @@ export interface PetProps extends PetCommonProps {
   };
   lookAtPointer?: boolean;
   lookDeadzone?: number;
+  muttering?: boolean;
+  mutteringPrompt?: string;
+  mutteringIntervalSec?: number;
+  mutteringImmediate?: boolean;
+  mutteringImage?: boolean;
+  mutteringDuration?: number;
+  mutteringMotion?: MotionInput;
+  onMuttering?: PetMutteringHandler;
 }
 export interface PetRef {
   motion: (_: MotionInput) => void;
   clear: () => void;
   readonly current: PetRenderMotion;
+  bubble: PetBubbleHandle;
+  muttering: PetMutteringHandle;
 }
 export interface PetWeights {
   idle: number;
@@ -148,11 +233,16 @@ export type AnimationSlot = string | string[];
 export type EventSlot = string | string[];
 export type Motion = (typeof MOTIONS)[number];
 export type MotionInput = PetRenderMotion | MotionOptions;
+export type PetBubbleKind = 'bubble' | 'muttering';
+export type PetBubblePlacement = 'top' | 'bottom';
+export type PetBubbleVariant = 'default' | 'success' | 'warning' | 'danger';
 export type PetConfig = DshPetConfig | CodexPetConfig;
 export type PetConfigSource = string | PetConfig;
 export type PetCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 export type PetDisplay = 'web' | 'desktop' | 'both' | 'none';
 export type PetEvents = Record<string, EventSlot[]>;
+export type PetMutteringHandler = (_: string, _: PetMutteringEvent) => void;
+export type PetMutteringReason = 'baseline' | 'tick' | 'manual';
 export type PetRenderMotion = Motion | 'dragging';
 // #endregion
 

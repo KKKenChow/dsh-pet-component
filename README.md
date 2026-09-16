@@ -154,6 +154,55 @@ export function App() {
 * **与宿主回调共存**：内置判定叠加在你传入的 `onHitboxPointerDown` / `onHitboxPointerUp` / `onHitboxPointerCancel` 之外，宿主自己的指针回调照常收到事件。
 * **实现**：判定窗口用 [@reause/core](https://github.com/hairyf/reause) 的 `useStateAutoReset` 表达，见 `src/hooks/use-double-click.ts`。
 
+### 气泡与碎碎念
+
+**气泡**（`pet.bubble`）是纯展示层：宿主管内容，组件管叠加、原地更新、定时收起与捆绑运行动画。所有尺寸以宠物实测宽度（`--dsh-pet-size`）等比缩放，观感与 dsh-pet 的白气泡一致（白色半透明底 + 指向宠物的小尾巴）。
+
+```ts
+const key = pet.bubble({ id: 's1', title: '会话标题', description: '正在分析代码…', loading: true, motion: 'thinking' })
+
+// 同一个 id 再下发 = 原地更新：只换内容，不重新淡入、不重置收起计时
+pet.bubble({ id: 's1', description: '分析完成：改了 3 个文件', loading: false, variant: 'success', motion: 'success' })
+
+pet.bubble.close('s1') // 不给 id = 收起最近一条
+pet.bubble.clear()
+```
+
+| 选项 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `id` | `string` | 自增 | 稳定 key；同 id 再次下发即原地更新 |
+| `title` / `description` / `icon` | `ReactNode` | — | 标题行 / 正文（可更新文字）/ 图标槽 |
+| `image` | `string` | — | 配图地址（宿主给完整 URL） |
+| `loading` | `boolean` | `false` | 显示内置 CSS 圆环（加载态） |
+| `variant` | `'default' \| 'success' \| 'warning' \| 'danger'` | `'default'` | 语义色，决定内置图标与默认收起时长 |
+| `motion` | `MotionInput` | — | 捆绑运行动画：创建时下发一次；收起时按 `restore` 回落 |
+| `restore` | `boolean` | `true` | 收起时是否 `pet.clear()` 回落 `motion` prop |
+| `timeout` | `number` | 按语义色 | 自动收起 ms（`success` 3000 / `warning` 2500 / `danger` 4000 / `default` 常驻） |
+| `placement` | `'top' \| 'bottom'` | `'top'` | 相对宠物的方向 |
+
+同时最多显示 **3 条**，超出关最旧（对齐桌面端 `MAX_VISIBLE_TOASTS`）。气泡层由 `<Pet>` 自己挂在 `.dsh-pet-shell` 上 —— `DshPet` / `CodexPet` 两个渲染器里没有任何气泡逻辑。
+
+**碎碎念**（`muttering`）是触发层：组件管节拍与提示词，宿主管模型生成 —— 与 dsh-pet 的分工一致。
+
+```tsx
+<Pet
+  config={config}
+  uri={uri}
+  muttering                  // 缺省回落 config 的 pets[i].whisperEnabled
+  mutteringIntervalSec={300} // 缺省 config.eventsRefreshSec.whisper，再缺省 3600（下限 1 秒）
+  mutteringImage             // 缺省回落 config.whisperImageEnabled
+  onMuttering={(prompt, { petId, reason, intervalSec, meme }) => {
+    generate(prompt, meme).then(text => pet.muttering(text, { image: meme && memeUrl(meme.name) }))
+  }}
+/>
+```
+
+* **首拍只记基线**：挂载后第一次到点以 `reason: 'baseline'` 通知宿主，且这期间推回的文本**不会展示**（对应 dsh-pet 的 `hasBaseline`，避免启动/刷新时重放旧句子）；`mutteringImmediate` 可关掉这个行为。
+* **宿主推回才展示**：组件不持有 Promise。`pet.muttering(text, { image?, duration? })` 从 `animations.events.whisper` 整池随机抽一段动画播放（避开上一段），并弹一条 10s 白气泡；池为空时回落 `mutteringMotion`（缺省 `waving` —— Codex 图集走这条）。
+* **配图**：开启后组件从 `config.memes` 随机抽 1 张（不让模型选），把 `{ name, desc }` 放进事件载荷供宿主拼提示词，图片 URL 由宿主给。
+* **手动触发**：`pet.muttering.request()` 立即以 `reason: 'manual'` 再索取一句，绕过周期与首拍基线。
+* **失败静默**：`onMuttering` 抛错只 `console.warn`，不打断周期、不弹错误气泡。
+
 ---
 
 ## 📚 API 参考
@@ -187,6 +236,14 @@ export { Pet, useConfig, useControllablePet } from 'dsh-pet-component'
 | `onAnimationChange` | `(info: PetAnimationInfo | null) => void` | — | 底层播放动画变更回调，常用于埋点或测试 |
 | `onReady` | `() => void` | — | 资源加载就绪回调 |
 | `onError` | `(error: unknown) => void` | — | 资源加载或播放异常回调 |
+| `muttering` | `boolean` | *config* | 自动碎碎念开关；缺省回落 `config.pets[i].whisperEnabled`（上游缺省 `false`） |
+| `mutteringPrompt` | `string` | *config* | 覆盖 `config.whisperPrompt`（碎碎念人设 / system 提示词） |
+| `mutteringIntervalSec` | `number` | *config* / `3600` | 碎碎念周期（秒；下限 1 秒） |
+| `mutteringImmediate` | `boolean` | `false` | 首拍即索取 —— 关掉 dsh-pet 的「首拍只记基线」 |
+| `mutteringImage` | `boolean` | *config* | 是否抽配图；缺省回落 `config.whisperImageEnabled` |
+| `mutteringDuration` | `number` | `10000` | 碎碎念气泡展示时长 ms（对齐 dsh-pet `BUBBLE_DURATION_MS`） |
+| `mutteringMotion` | `MotionInput` | `'waving'` | `events.whisper` 池为空时的回落动作 |
+| `onMuttering` | `(prompt: string, event: PetMutteringEvent) => void` | — | 「该要一句了」；宿主生成后调 `pet.muttering(text)` 推回 |
 | `ref` / `className` / `style` | — | — | 标准命令控制 Ref 及常规 DOM 属性透传 |
 
 ### `useConfig`
@@ -210,6 +267,8 @@ const pet = useControllablePet(petRef)
 | `motion` | `(input: MotionInput) => void` | 手动下发动作命令；`loop` 默认取动作语义，`replay: true` 强制重新触发播放 |
 | `clear` | `() => void` | 清空命令层，使动作回落至当前 `motion` prop 参数 |
 | `current` | `PetRenderMotion` | **[只读]** 当前生效的动作状态（包含 `dragging`） |
+| `bubble` | `PetBubbleHandle` | 气泡命令面：`pet.bubble({…})` / `pet.bubble.close(id?)` / `pet.bubble.clear()` |
+| `muttering` | `PetMutteringHandle` | 碎碎念命令面：`pet.muttering(text, { image?, duration? })` / `pet.muttering.request()` |
 
 ---
 

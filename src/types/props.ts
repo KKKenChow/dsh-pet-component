@@ -1,4 +1,5 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent, Ref } from 'react'
+import type { PetBubbleHandle, PetMutteringHandle, PetMutteringHandler } from './bubble'
 import type { MotionInput, PetRenderMotion } from './motion'
 
 /**
@@ -114,6 +115,16 @@ export interface DshPetProps extends PetCommonProps {
    * 模板，或一个完整文件地址（带扩展名时原样使用）。
    */
   uri: { default: string, mac?: string }
+  /**
+   * 一次性插播「按动画名」的动作（`seq` 变化即触发一次）。
+   *
+   * 组件内部用：碎碎念取的是 `animations.events.whisper` 整池里的动画名，不是 14 个
+   * 动作之一，走不了 `motion` 那条解析链（`resolveDshAnimation` 只吃动作），因此复用
+   * 与空闲掷骰插播同一条播放通道（`DshPet` 内部的 `adHoc` 状态）。
+   *
+   * @internal
+   */
+  adHocAnimation?: { name: string, seq: number } | null
 }
 
 /** Codex 图集渲染器 props（单张 8 列雪碧图）。 */
@@ -155,6 +166,49 @@ export interface PetProps extends PetCommonProps {
   lookAtPointer?: boolean
   /** look 的死区半径 px（**只对 codex 生效**） */
   lookDeadzone?: number
+  /**
+   * 自动碎碎念（v0.2.0）。
+   *
+   * 显式 `true` / `false` 优先；缺省 `undefined` 回落配置的 `pets[i].whisperEnabled`
+   * （上游缺省 `false`，注释写明原因是后台碎碎念会顶掉正在跑的任务的 KV cache）。
+   *
+   * 开启后组件按 `eventsRefreshSec.whisper` 周期回调 `onMuttering`，宿主生成完用
+   * `pet.muttering(text)` 推回；首拍只以 `reason: 'baseline'` 通知一次、且此期间推回的
+   * 文本不展示（对齐 dsh-pet 的「首拉只记基线」）。
+   */
+  muttering?: boolean
+  /** 覆盖配置的 `whisperPrompt`（碎碎念人设 / system 提示词） */
+  mutteringPrompt?: string
+  /** 覆盖配置的 `eventsRefreshSec.whisper`（秒；缺省 3600，下限 1 秒） */
+  mutteringIntervalSec?: number
+  /** 首拍即索取（关掉 dsh-pet 的「首拍只记基线」行为），缺省 `false` */
+  mutteringImmediate?: boolean
+  /** 是否抽配图；缺省回落配置的 `whisperImageEnabled` */
+  mutteringImage?: boolean
+  /** 气泡展示时长 ms，缺省 10000（对齐 dsh-pet `BUBBLE_DURATION_MS`） */
+  mutteringDuration?: number
+  /**
+   * 碎碎念动画的空池回落动作，缺省 `waving`。
+   *
+   * Codex 图集没有 whisper 行、或 dsh 配置里 `animations.events.whisper` 为空时使用。
+   */
+  mutteringMotion?: MotionInput
+  /**
+   * 「该要一句了」—— 宿主在这里调用模型，然后用 `pet.muttering(text, { image })` 推回。
+   *
+   * ```tsx
+   * <Pet
+   *   config={config}
+   *   uri={uri}
+   *   muttering
+   *   onMuttering={async (prompt, { meme }) => {
+   *     const text = await askModel(prompt, meme)
+   *     pet.muttering(text, { image: meme ? memeUrl(meme.name) : undefined })
+   *   }}
+   * />
+   * ```
+   */
+  onMuttering?: PetMutteringHandler
 }
 
 /**
@@ -184,4 +238,20 @@ export interface PetRef {
   clear: () => void
   /** 当前生效的动作（只读；可能是手势态 `dragging`） */
   readonly current: PetRenderMotion
+  /**
+   * 气泡命令面（v0.2.0）—— 叠加在宠物上方、原地更新、定时收起、可捆绑运行动画。
+   *
+   * ```ts
+   * const key = pet.bubble({ title: '会话', description: '正在处理', loading: true, motion: 'working' })
+   * pet.bubble({ id: key, description: '已完成', loading: false, motion: 'success' })  // 原地更新
+   * pet.bubble.close(key)
+   * ```
+   */
+  bubble: PetBubbleHandle
+  /**
+   * 碎碎念命令面（v0.2.0）：`pet.muttering(text)` 展示一句（抽
+   * `animations.events.whisper` + 白气泡），`pet.muttering.request()` 立即再向宿主
+   * 索取一句（绕过周期与首拍基线）。
+   */
+  muttering: PetMutteringHandle
 }

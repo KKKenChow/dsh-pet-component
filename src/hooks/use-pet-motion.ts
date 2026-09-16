@@ -147,13 +147,16 @@ export function usePetMotion(options: UsePetMotionOptions): UsePetMotionReturn {
     setDone(current.revision)
   }, [])
 
+  // 渲染器只实现动作三项 —— `bubble` / `muttering` 由 `Pet` 组合到公开句柄上
+  // （见 `src/components/pet.tsx`）：一个 ref 只能被一处 `useImperativeHandle` 写，
+  // 所以这里交出的是「动作子集」，公开的 `PetRef` 由 `Pet` 一次性交出。
   useImperativeHandle(ref, () => ({
     motion: request,
     clear,
     get current() {
       return stateRef.current.type
     },
-  }), [request, clear])
+  } as PetRef), [request, clear])
 
   const lastNotifiedRef = useRef(state.type)
   useEffect(() => {

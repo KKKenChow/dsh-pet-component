@@ -471,3 +471,63 @@ pnpm dev:playground                        # 手动验收：叠加 / 更新 / �
 3. **Bug 3「先碎碎念再触发气泡，碎碎念 toast 不消失、叠在后面」**：气泡层不知道谁更重要，碎碎念
    只能等自己的 10s。现在 `Pet` 在**非碎碎念**气泡创建/更新时立即 `close()` 掉碎碎念那条（固定
    id），状态气泡不会再和闲聊叠在一起；碎碎念的动画仍会自然播完。
+
+---
+
+## 15. 架构纠正：动作改成**声明式聚合**（对齐参考实现，替换 §13/§14 的一串补丁）
+
+起因：用户指出「deepseek-harness-desktop 的气泡没这么多问题」。读完参考实现后确认，根因是我把
+气泡动作走了**命令面**，而参考实现是声明式的：
+
+```tsx
+// source/deepseek-harness-desktop/src/pet/app.tsx:55-57,71
+const motion = dragging ? (direction === undefined ? undefined : `moving-${direction}`) : bubble.motion
+<Pet motion={motion} dragging={dragging} … />
+```
+
+`bubble.motion` 就是 `bubble-tracker.ts` 里多会话聚合出的档位（`statusOf` + `STATUS_PRIORITY`）。
+动作是**从状态推导**出来的，所以「谁拥有动作」「收起时要不要 clear」「循环动作会不会一直播」
+这些问题在结构上就不存在。
+
+§13/§14 里的补丁（`restore` 缺省 false、motionOwnerRef 动作主人、newestMotionBubble 交还、
+isLoopingBubbleMotion 主动 clear、监听 revision 抢占插播）全部是为了绕开「命令面会被 `motion`
+prop 变化清掉」这个结构错误 —— 现已整段删除。
+
+### 15.1 本仓库的新结构
+
+```tsx
+// src/components/pet.tsx
+const bubbleMotion = aggregateBubbleMotion(bubbles)   // 优先级表 = 参考实现的 STATUS_PRIORITY
+const effectiveMotion = bubbleMotion ?? motion        // 声明式，交给渲染器的 motion prop
+```
+
+- `aggregateBubbleMotion()`（`src/utils/bubble.ts`）与 `bubble-tracker.ts` 的 `statusOf` 同表同规则
+  （`waiting 60 > error 50 > failed 45 > review 40 > working 30 > result 25 > thinking 20 >
+  running 12 > success 10 > idle 0`，`>` 比较所以同档取先入队的那条）。多会话并发时宿主不必自己
+  算优先级，每条气泡带上自己的档位即可。
+- 动作随气泡状态自动出现 / 自动回落，**没有 `clear` 这回事**。`restore` 选项因此删除
+  （v0.2.0 未发布，属未发布 API 的调整；`tsnapi` 会把它记为 breaking，用
+  `TSNAPI_ALLOW_BREAKING=1 npx vitest run -u` 更新快照）。
+- `Pet` 里不再有 `motionOwnerRef` / `bubblesRef` / `onClose` 动作逻辑。
+
+### 15.2 顺带对齐参考实现的三处语义
+
+1. **超时只给终态档**：`BUBBLE_DEFAULT_TIMEOUT` 改为 `{ default: 0, success: 3000, warning: 0,
+   danger: 4000 }` —— 对应 `scheduleHide` 只给 `failed/error`(4000)、`review`(2500)、
+   `success`(3000) 排计时器；`waiting`（warning）与工作档位都是常驻。于是「更新为警告」不会莫名
+   开始倒计时，而「更新为完成」仍会 3s 后收起（转入终态档才排计时器）。`review` 语义请显式传
+   `timeout: 2500`。
+2. **插播只在纯待机时播**（`DshPet` 的 `idleForFlavor`）：会话状态优先于风味动作，状态动作不会被
+   插播挡住；碎碎念清掉状态气泡后正好回到待机，插播动画此时才有位置播 —— 不再需要「监听 revision
+   抢占插播」那条 effect。
+3. **碎碎念门控只在自动周期**：`isSuspended` 只挡 `tick()`，手动 `pet.muttering(...)` /
+   `request()` 永远可用（对齐 dsh-pet 注释「`whisperEnabled` 只关自动周期轮询，手动永远可用」，
+   `client/pet.ts:1252-1259`）；手动/自动碎碎念展示前先 `clear()` 掉状态气泡（说话优先于状态）。
+   周期默认对齐上游配置 `eventsRefreshSec.whisper = 300`（5 分钟），首拍仍只记基线。
+
+### 15.3 Codex look 的作用半径
+
+`CodexPet` 的 look 之前**没有上界**：指针停在屏幕任何角落都会把宠物钉在一个 look 格上，
+`pointermove` 之后再也不会回到待机动画。现在加了作用半径（`lookRadius` prop，缺省
+`max(宽, 高) * CODEX_LOOK_RADIUS_FACTOR = 1.25`），出界即 `setLookIndex(undefined)` 回待机；
+另外 `pointerout`（无 `relatedTarget`，即离开整窗）与窗口 `blur` 也会清掉 look，拖动期间不参与 look。

@@ -178,16 +178,19 @@ export function DshPet(props: DshPetProps) {
     },
   })
 
-  // 动作换档（状态气泡下发的动作 / 宿主的 `pet.motion(...)`）要**抢占**正在播的一次性插播：
-  // 插播只是风味（空闲掷骰、碎碎念），状态优先 —— 否则状态动作会被插播挡住，直到它自己播完。
-  // 插播自身（`setAdHoc` / 外部 `adHocAnimation`）不推进 revision，所以不会把自己刚设的插播清掉。
-  const motionRevision = state.revision
-  useEffect(() => {
-    // eslint-disable-next-line react/set-state-in-effect -- 「换动作」是命令式信号，没有受控入口能表达它；这条 effect 就是要抢占正在播的插播
-    setAdHoc(null)
-  }, [motionRevision])
-
   /* --------------------------------- 播放目标 -------------------------------- */
+
+  /** 「可以播风味插播」：纯待机（动作 `idle` + 循环）。 */
+  const idleForFlavor = state.type === PET_DEFAULT_MOTION && state.loop
+
+  // 宠物不再是待机（状态动作接手）时丢弃正在播的插播 —— 插播只在待机时播，见下面的播放目标；
+  // 反向不成立：碎碎念清掉状态气泡导致的回落（换成 idle）正是它要播的时刻，不能清。
+  useEffect(() => {
+    if (idleForFlavor)
+      return
+    // eslint-disable-next-line react/set-state-in-effect -- 「不再是待机」是命令式信号（插播作废），没有受控入口能表达它
+    setAdHoc(null)
+  }, [idleForFlavor])
 
   const playback = useMemo<DshPlayback | null>(() => {
     if (dragging) {
@@ -197,13 +200,14 @@ export function DshPet(props: DshPetProps) {
         return null
       return { motion: 'dragging', name: dragName, once: !isLoopingMotion('dragging'), seq: state.revision }
     }
-    // 插播（点击回应/空闲掷骰）优先级更高，且一律播一次
-    if (adHoc !== null)
+    // 插播（点击回应 / 空闲掷骰 / 碎碎念）只在**纯待机**时播且一律播一次：会话状态优先于风味动作，
+    // 否则状态动作会被插播挡到它自己播完（dsh-pet 的空闲掷骰链同样是「只在待机时掷骰」）
+    if (adHoc !== null && idleForFlavor)
       return { motion: adHoc.pick.motion, name: adHoc.pick.name, once: true, seq: adHoc.seq }
     if (animationName === null)
       return null
     return { motion: state.type, name: animationName, once: !state.loop, seq: state.revision }
-  }, [adHoc, animationName, dragging, state.loop, state.revision, state.type])
+  }, [adHoc, animationName, dragging, idleForFlavor, state.loop, state.revision, state.type])
 
   const playbackRef = useRef(playback)
   playbackRef.current = playback

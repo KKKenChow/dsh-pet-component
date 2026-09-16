@@ -122,6 +122,9 @@ export const CODEX_LOOK_START_ROW = 9
 /** look 格总数（16 = 每 22.5° 一格）。 */
 export const CODEX_LOOK_CELLS = 16
 
+/** Codex look 的默认作用半径系数：`max(宽, 高) * 它`，出界即回待机帧。 */
+export const CODEX_LOOK_RADIUS_FACTOR = 1.25
+
 /** 解析后的 Codex 帧定义。 */
 export interface CodexResolvedFrame {
   /** 行号（0 起） */

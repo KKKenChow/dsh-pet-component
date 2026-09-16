@@ -202,28 +202,32 @@ describe('createMutteringController', () => {
     warn.mockRestore()
   })
 
-  it('挂起（有加载态气泡）时整体禁用，且不消费「首拍基线」', () => {
+  it('挂起（有加载态气泡）只挡自动周期，手动依然可用，且不消费「首拍」', () => {
     let suspended = false
     const { controller, asked, played, shown } = setup({ isSuspended: () => suspended })
 
     suspended = true
+    // 自动周期被挂起（对齐 dsh-pet：`whisperEnabled` 只关自动轮询）
     controller.tick()
-    controller.request()
-    controller.show('挂起期间的一句话')
     expect(asked).toHaveLength(0)
-    expect(played).toHaveLength(0)
-    expect(shown).toHaveLength(0)
 
-    // 恢复后第一拍仍然是 baseline（挂起没有把它消费掉）
+    // 手动路径不受挂起影响：说话优先于状态展示（`Pet` 层会先清掉状态气泡）
+    controller.request()
+    expect(asked[0]?.event.reason).toBe('manual')
+    controller.show('挂起期间也能说话')
+    expect(played).toHaveLength(1)
+    expect(shown).toHaveLength(1)
+
+    // 挂起没有消费「首拍」：恢复后的第一次**周期**仍然只记基线
     suspended = false
     controller.tick()
-    expect(asked[0]?.event.reason).toBe('baseline')
+    expect(asked[1]?.event.reason).toBe('baseline')
     controller.show('基线那句被丢弃')
-    expect(shown).toHaveLength(0)
+    expect(shown).toHaveLength(1)
 
     controller.tick()
     controller.show('这一句能展示')
-    expect(shown).toHaveLength(1)
+    expect(shown).toHaveLength(2)
   })
 
   it('dispose 之后全部 no-op', () => {

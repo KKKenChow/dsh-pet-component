@@ -213,8 +213,7 @@ export function PetDemo() {
                 onHitboxPointerCancel={drag.onHitboxPointerUp}
                 muttering={mutteringOn}
                 mutteringImage={memeOn}
-                mutteringIntervalSec={15}
-                mutteringImmediate
+                mutteringIntervalSec={300}
                 onMuttering={handleMuttering}
                 onMotionChange={setCurrent}
                 onAnimationChange={setAnimation}
@@ -449,9 +448,11 @@ export function PetDemo() {
 
           <div>
             <p className="motion-bar__title">
-              碎碎念 · muttering（组件管节拍，宿主管生成；首拍只记基线，勾「立即」可跳过）
+              碎碎念 · muttering（组件管节拍，宿主管生成；首拍只记基线，之后每 300 秒一拍 = 上游
+              {' '}
+              eventsRefreshSec.whisper
             </p>
-            <div className="actions actions--wrap">
+            <div className="actions actions--wrap" style={{ marginBottom: '1em' }}>
               <button
                 type="button"
                 className="btn"
@@ -477,10 +478,10 @@ export function PetDemo() {
             </div>
             <div className="controls">
               <Switch
-                label="自动碎碎念（15s 一拍，宿主用本地假句子生成）"
+                label="自动碎碎念（300s 一拍，宿主用本地假句子生成）"
                 checked={mutteringOn}
                 onChange={setMutteringOn}
-                hint="勾上立刻索取第一句；之后每 15 秒一拍，生成完由宿主调 pet.muttering(text) 推回"
+                hint="勾上后首拍只记基线（对齐 dsh-pet 的 hasBaseline），之后每 300 秒一拍；急着看就点「立即要一句」。加载态只挡自动碎碎念，手动随时可用"
               />
               <Switch
                 label="碎碎念配图（config.memes 随机抽 1 张）"

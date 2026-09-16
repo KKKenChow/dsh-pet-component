@@ -140,6 +140,12 @@ export interface CodexPetProps extends PetCommonProps {
   lookAtPointer?: boolean
   /** look 的死区半径 px（指针离宠物中心多近算「没在看」，默认 24） */
   lookDeadzone?: number
+  /**
+   * look 的作用半径 px（指针离宠物中心多远之外就不再跟随），默认 `max(宽, 高) * 1.25`。
+   *
+   * 没有上界时指针在屏幕任何角落都会把宠物钉在 look 格上、待机动画再也不播；出界即恢复待机。
+   */
+  lookRadius?: number
 }
 
 /**
@@ -166,6 +172,8 @@ export interface PetProps extends PetCommonProps {
   lookAtPointer?: boolean
   /** look 的死区半径 px（**只对 codex 生效**） */
   lookDeadzone?: number
+  /** look 的作用半径 px（**只对 codex 生效**）；缺省 `max(宽, 高) * 1.25` */
+  lookRadius?: number
   /**
    * 自动碎碎念（v0.2.0）。
    *

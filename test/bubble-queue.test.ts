@@ -1,26 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBubbleQueue } from '../src/hooks/use-pet-bubbles'
 import {
+  aggregateBubbleMotion,
   BUBBLE_DEFAULT_TIMEOUT,
+  BUBBLE_MOTION_PRIORITY,
   createBubble,
-  isLoopingBubbleMotion,
   MAX_VISIBLE_BUBBLES,
-  newestMotionBubble,
-  resolveBubbleMotion,
   resolveBubbleTimeout,
   updateBubble,
 } from '../src/utils/bubble'
 
 /* -------------------------------------------------------------------------- */
-/* 时长默认值（对齐 desktop 的四个常量）                                        */
+/* 时长默认值（对齐 desktop 的 scheduleHide：只有终态档排计时器）                */
 /* -------------------------------------------------------------------------- */
 
 describe('resolveBubbleTimeout', () => {
-  it('缺省按语义色取值', () => {
-    expect(BUBBLE_DEFAULT_TIMEOUT).toEqual({ default: 0, success: 3000, warning: 2500, danger: 4000 })
+  it('缺省按语义色取值：只有终态档（success / danger）会自己收', () => {
+    expect(BUBBLE_DEFAULT_TIMEOUT).toEqual({ default: 0, success: 3000, warning: 0, danger: 4000 })
     expect(resolveBubbleTimeout('default')).toBe(0)
     expect(resolveBubbleTimeout('success')).toBe(3000)
-    expect(resolveBubbleTimeout('warning')).toBe(2500)
+    // warning 对应参考实现的 waiting（优先级 60，常驻）；review 的 2500 由宿主显式传 timeout
+    expect(resolveBubbleTimeout('warning')).toBe(0)
     expect(resolveBubbleTimeout('danger')).toBe(4000)
   })
 
@@ -37,13 +37,12 @@ describe('resolveBubbleTimeout', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('createBubble / updateBubble', () => {
-  it('补齐默认值：loading 假、restore 假（不动动作）、placement top、kind bubble', () => {
+  it('补齐默认值：loading 假、placement top、kind bubble', () => {
     expect(createBubble({ description: '你好' }, 'a', 1)).toMatchObject({
       id: 'a',
       description: '你好',
       created: 1,
       loading: false,
-      restore: false,
       placement: 'top',
       kind: 'bubble',
       variant: 'default',
@@ -216,7 +215,7 @@ describe('createBubbleQueue', () => {
     })
     queue.show({ id: 'a', description: 'x' })
     queue.show({ id: 'a', description: 'y' })
-    // 内容没变的原地更新也会回调（要不要重发动画由渲染层的 resolveBubbleMotion 决定）
+    // 内容没变的原地更新也会回调（动作由气泡聚合结果声明式推导，不需要这里决定重发）
     queue.show({ id: 'a', description: 'y' })
     expect(updates).toEqual([['x', 'y'], ['y', 'y']])
   })
@@ -238,58 +237,46 @@ describe('createBubbleQueue', () => {
   })
 })
 
-describe('resolveBubbleMotion', () => {
-  it('档位变了才重发；没给 motion 或用等价的 motion 都不重发', () => {
-    const thinking = createBubble({ description: 'x', motion: 'thinking' }, 'a', 1)
-    // 更新没带 motion → 不重发
-    expect(resolveBubbleMotion(createBubble({ description: 'y' }, 'a', 1), thinking)).toBeUndefined()
-    // 等价的 motion（对象字面量 vs 字符串）→ 不重发，用 motionInputKey 比较而不是引用比较
-    expect(resolveBubbleMotion(updateBubble(thinking, { motion: { type: 'thinking' } }), thinking)).toBeUndefined()
-    // 换档位 → 重发新的那一个
-    const done = updateBubble(thinking, { loading: false, variant: 'success', motion: 'success' })
-    expect(resolveBubbleMotion(done, thinking)).toBe('success')
-    // 之前没有 motion、现在有了 → 重发
-    expect(resolveBubbleMotion(done, createBubble({ description: 'y' }, 'a', 1))).toBe('success')
+describe('aggregateBubbleMotion', () => {
+  it('按参考实现的优先级取最高档；没带 motion 的气泡不参与', () => {
+    const thinking = createBubble({ description: '思考', motion: 'thinking' }, 'a', 1)
+    const success = createBubble({ description: '完成', motion: 'success' }, 'b', 2)
+    expect(aggregateBubbleMotion([thinking, success])).toBe('thinking')
+    expect(aggregateBubbleMotion([success, thinking])).toBe('thinking')
+    expect(aggregateBubbleMotion([createBubble({ description: 'x' }, 'c', 3), success])).toBe('success')
+    expect(aggregateBubbleMotion([createBubble({ description: 'x' }, 'd', 4)])).toBeUndefined()
+    expect(aggregateBubbleMotion([])).toBeUndefined()
+  })
+
+  it('等待档压过一切；同档位取先入队的那条（与 statusOf 的 `>` 比较一致）', () => {
+    const working = createBubble({ description: '工作', motion: 'working' }, 'a', 1)
+    const waiting = createBubble({ description: '等待', motion: 'waiting' }, 'b', 2)
+    expect(aggregateBubbleMotion([working, waiting])).toBe('waiting')
+
+    const first = createBubble({ description: '一', motion: 'thinking' }, 'c', 3)
+    const second = createBubble({ description: '二', motion: { type: 'thinking' } }, 'd', 4)
+    expect(aggregateBubbleMotion([first, second])).toBe('thinking')
+  })
+
+  it('优先级表覆盖 15 个动作槽（14 动作 + 手势态 dragging）', () => {
+    expect(Object.keys(BUBBLE_MOTION_PRIORITY)).toHaveLength(15)
+    expect(BUBBLE_MOTION_PRIORITY.waiting).toBe(60)
+    expect(BUBBLE_MOTION_PRIORITY.error).toBe(50)
+    expect(BUBBLE_MOTION_PRIORITY.success).toBe(10)
+    expect(BUBBLE_MOTION_PRIORITY.idle).toBe(0)
   })
 })
 
 describe('updateBubble 的时长重算规则', () => {
-  it('语义色换了就按新语义色的默认时长重算', () => {
+  it('语义色换了就按新语义色的默认时长重算（转入终态档才排计时器）', () => {
     const loading = createBubble({ description: 'x', loading: true }, 'a', 1)
     expect(loading.duration).toBe(0)
     expect(updateBubble(loading, { description: 'y', variant: 'success' }).duration).toBe(3000)
     expect(updateBubble(loading, { description: 'y', variant: 'danger' }).duration).toBe(4000)
-    expect(updateBubble(loading, { description: 'y', variant: 'warning' }).duration).toBe(2500)
+    // warning 是等待档（常驻）：「更新为警告」不该莫名开始倒计时
+    expect(updateBubble(loading, { description: 'y', variant: 'warning' }).duration).toBe(0)
     // 语义色没变又没给 timeout → 时长不动
     const success = createBubble({ description: 'x', variant: 'success' }, 'a', 1)
     expect(updateBubble(success, { description: 'y' }).duration).toBe(3000)
-  })
-})
-
-describe('newestMotionBubble', () => {
-  it('交还动作时挑最新的那条带 motion 的，跳过正在收起的那条', () => {
-    const first = createBubble({ description: 'a', motion: 'thinking' }, 'a', 1)
-    const middle = createBubble({ description: 'b' }, 'b', 2)
-    const last = createBubble({ description: 'c', motion: 'success' }, 'c', 3)
-
-    expect(newestMotionBubble([first, middle, last])?.id).toBe('c')
-    // 正在收起的 last 被跳过 → 交还给 first
-    expect(newestMotionBubble([first, middle, last], 'c')?.id).toBe('a')
-    // 没有别的气泡带 motion → undefined（调用方因此不动动作）
-    expect(newestMotionBubble([first, middle], 'a')).toBeUndefined()
-    expect(newestMotionBubble([], 'a')).toBeUndefined()
-  })
-})
-
-describe('isLoopingBubbleMotion', () => {
-  it('循环动作为真、一次性动作与未给动作为假', () => {
-    expect(isLoopingBubbleMotion('thinking')).toBe(true)
-    expect(isLoopingBubbleMotion({ type: 'working' })).toBe(true)
-    expect(isLoopingBubbleMotion('waiting')).toBe(true)
-    // 一次性动作：让它自己播完再回落，不主动 clear
-    expect(isLoopingBubbleMotion('success')).toBe(false)
-    expect(isLoopingBubbleMotion({ type: 'waving' })).toBe(false)
-    expect(isLoopingBubbleMotion('turn')).toBe(false)
-    expect(isLoopingBubbleMotion(undefined)).toBe(false)
   })
 })

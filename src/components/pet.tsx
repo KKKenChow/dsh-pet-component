@@ -8,7 +8,7 @@ import { useControllablePet } from '../hooks/use-controllable-pet'
 import { useDoubleClick } from '../hooks/use-double-click'
 import { useMuttering } from '../hooks/use-muttering'
 import { usePetBubbles } from '../hooks/use-pet-bubbles'
-import { isLoopingBubbleMotion, newestMotionBubble, resolveBubbleMotion } from '../utils/bubble'
+import { aggregateBubbleMotion } from '../utils/bubble'
 import { PetBubbleLayer } from './bubble-layer'
 import { CodexPet } from './codex-pet'
 import { DshPet } from './dsh-pet'
@@ -94,6 +94,7 @@ export function Pet(props: PetProps) {
     ext,
     lookAtPointer,
     lookDeadzone,
+    lookRadius,
     ref,
     motion,
     muttering,
@@ -142,12 +143,7 @@ export function Pet(props: PetProps) {
 
   /* ---------------------------------- 气泡 --------------------------------- */
 
-  // 队列的实时快照：`onClose` 里要用它找「还有谁带着动作」
-  const bubblesRef = useRef<readonly PetBubble[]>([])
-  // 当前动作的下发者（气泡 id）。只有它的主人收起时才有资格交还动作 —— 否则关掉一条
-  // 没带动画的气泡会把正在播的动画打断（成功动画播到一半被掐断就是这个原因）
-  const motionOwnerRef = useRef<string | null>(null)
-  // 气泡命令面（`dismissMuttering` 要在回调里用它关掉闲聊那条）
+  /** 气泡命令面（`dismissMuttering` 在回调里用它关掉闲聊那条） */
   const bubbleHandleRef = useRef<PetBubbleHandle | null>(null)
 
   /**
@@ -160,46 +156,26 @@ export function Pet(props: PetProps) {
   }
 
   const { bubbles, handle: bubbleHandle } = usePetBubbles({
-    // 捆绑运行动画：气泡**创建**时下发一次（宿主聚合出的档位在这里变成真实动作）
-    onShow: (bubble: PetBubble) => {
-      if (bubble.motion !== undefined) {
-        motionOwnerRef.current = bubble.id
-        motionRequest(bubble.motion)
-      }
-      dismissMuttering(bubble)
-    },
-    // 原地更新时档位换了（加载态 → 完成态）必须重发一次，否则画面停在加载态的动作上
-    onUpdate: (bubble: PetBubble, previous: PetBubble) => {
-      const motion = resolveBubbleMotion(bubble, previous)
-      if (motion !== undefined) {
-        motionOwnerRef.current = bubble.id
-        motionRequest(motion)
-      }
-      dismissMuttering(bubble)
-    },
-    // 收起时**交还**而不是一律 clear：先看队列里还有没有别的气泡带着动作，交还给最新的那条；
-    // 都没了才收尾 —— `restore: true` 一律清，缺省时只有**循环**动作需要清
-    // （一次性动作让它自己播完；循环动作不主动清就会永远播下去）
-    onClose: (bubble: PetBubble) => {
-      if (motionOwnerRef.current !== bubble.id)
-        return
-      motionOwnerRef.current = null
-      const next = newestMotionBubble(bubblesRef.current, bubble.id)
-      if (next?.motion !== undefined) {
-        motionOwnerRef.current = next.id
-        motionRequest(next.motion)
-        return
-      }
-      if (bubble.restore || isLoopingBubbleMotion(bubble.motion))
-        motionClear()
-    },
+    onShow: dismissMuttering,
+    onUpdate: dismissMuttering,
   })
 
-  // 渲染后再同步快照（`onClose` 触发时 state 里还包含正在收起的那条，`excludeId` 会跳过它）
-  bubblesRef.current = bubbles
   bubbleHandleRef.current = bubbleHandle
 
-  // 有气泡处于加载态时碎碎念整体禁用（别让后台碎碎念打断正在跑的会话）
+  /**
+   * 气泡聚合出的动作 —— **声明式**交给渲染器的 `motion` prop，对齐参考实现
+   * （`app.tsx` 的 `motion={dragging ? moving-* : bubble.motion}`）。
+   *
+   * 之前走命令面 `pet.motion(...)`，而命令面会被任何 `motion` prop 变化清掉
+   * （`usePetMotion` 的「prop 变化重新接管」）—— 拖动、宿主换 prop 都会把气泡下发的动作
+   * 弄丢，于是才有了「动作主人」「收起时交还」「循环动作主动 clear」这一串补丁。
+   * 声明式之后没有「谁拥有动作」这回事：气泡在，动作就在；气泡收起，动作自动回落。
+   */
+  const bubbleMotion = aggregateBubbleMotion(bubbles)
+  const effectiveMotion = bubbleMotion ?? motion
+
+  // 有气泡处于加载态时**自动**碎碎念挂起（别让后台碎碎念打断正在跑的会话）；
+  // 手动 `pet.muttering(...)` / `request()` 不受影响（对齐 dsh-pet：whisperEnabled 只关自动轮询）
   const mutteringSuspended = bubbles.some(bubble => bubble.loading)
 
   // 气泡全部尺寸以宠物**实测宽度**等比缩放（`--dsh-pet-size`）：实测而不是按配置推算，
@@ -249,6 +225,9 @@ export function Pet(props: PetProps) {
       setAdHocAnimation({ name, seq: adHocSeqRef.current })
     },
     onShow: (text, options) => {
+      // 说话优先于状态展示：先把状态气泡清掉（碎碎念就是「此时插一句话」），再挂碎碎念那条 ——
+      // 否则它只能叠在状态气泡后面等对方先超时；清掉之后动作自动回落待机，插播动画才有位置播
+      bubbleHandle.clear()
       bubbleHandle({
         id: MUTTERING_BUBBLE_ID,
         kind: 'muttering',
@@ -301,24 +280,24 @@ export function Pet(props: PetProps) {
       <div ref={shellRef} className="dsh-pet-shell" style={shellStyle}>
         <CodexPet
           {...common}
-          motion={motion}
+          motion={effectiveMotion}
           ref={motionRef}
           onHitboxPointerDown={onHitboxPointerDown}
           config={resolved as CodexPetConfig}
           uri={typeof uri === 'string' ? uri : uri?.default}
           lookAtPointer={lookAtPointer}
           lookDeadzone={lookDeadzone}
+          lookRadius={lookRadius}
         />
         {bubbleLayer}
       </div>
     )
   }
-  const isMoving = (motion === 'moving-left' || motion === 'moving-right') && common.dragging
   return (
     <div ref={shellRef} className="dsh-pet-shell" style={shellStyle}>
       <DshPet
         {...common}
-        motion={isMoving ? undefined : motion}
+        motion={effectiveMotion}
         ref={motionRef}
         adHocAnimation={adHocAnimation}
         onHitboxPointerDown={onHitboxPointerDown}

@@ -175,9 +175,8 @@ pet.bubble.clear()
 | `image` | `string` | — | 配图地址（宿主给完整 URL） |
 | `loading` | `boolean` | `false` | 显示内置 CSS 圆环（加载态） |
 | `variant` | `'default' \| 'success' \| 'warning' \| 'danger'` | `'default'` | 语义色，决定内置图标与默认收起时长 |
-| `motion` | `MotionInput` | — | 捆绑运行动画：创建时下发一次，原地更新换档时重发 |
-| `restore` | `boolean` | `false` | 收起时是否 `pet.clear()`；缺省不动动作（先交还给最新的那条带 `motion` 的气泡，都没了才看它） |
-| `timeout` | `number` | 按语义色 | 自动收起 ms（`success` 3000 / `warning` 2500 / `danger` 4000 / `default` 常驻） |
+| `motion` | `MotionInput` | — | 捆绑运行动画（会话档位）；组件把所有气泡的 `motion` 按优先级聚合后声明式交给 `<Pet>` |
+| `timeout` | `number` | 按语义色 | 自动收起 ms（`success` 3000 / `danger` 4000；`default`、`warning` 常驻，显式传才倒计时） |
 | `placement` | `'top' \| 'bottom'` | `'top'` | 相对宠物的方向 |
 
 同时最多显示 **3 条**，超出关最旧（对齐桌面端 `MAX_VISIBLE_TOASTS`）。气泡层由 `<Pet>` 自己挂在 `.dsh-pet-shell` 上 —— `DshPet` / `CodexPet` 两个渲染器里没有任何气泡逻辑。
@@ -199,8 +198,9 @@ pet.bubble.clear()
 
 * **首拍只记基线**：挂载后第一次到点以 `reason: 'baseline'` 通知宿主，且这期间推回的文本**不会展示**（对应 dsh-pet 的 `hasBaseline`，避免启动/刷新时重放旧句子）；`mutteringImmediate` 可关掉这个行为。
 * **宿主推回才展示**：组件不持有 Promise。`pet.muttering(text, { image?, duration? })` 从 `animations.events.whisper` 整池随机抽一段动画播放（避开上一段），并弹一条 10s 气泡；这句话走 `title`（说话语气、不占图标位），配图走 `image`；池为空时回落 `mutteringMotion`（缺省 `waving` —— Codex 图集走这条）。
-* **气泡与动画解耦**：气泡收起**不会**掐断正在播的动画（`restore` 缺省 `false`）。成功 toast 3s 消失、成功动画自己播完才回落，与 desktop 的 `TERMINAL_PULSE_TTL = 10s` 同思路；队列里还有别的气泡带着 `motion` 时动作交给最新的那条；**循环**动作（`thinking` / `working` …）不会自己结束，所以最后一条带动画的气泡收起时会主动回落，避免一直播下去。
-* **状态压过闲聊**：出现非碎碎念气泡时，碎碎念那条会立即收起（不会叠在状态气泡后面）；状态动作也会**抢占**正在播的一次性插播（空闲风味动作 / 碎碎念动画），不必等它播完。
+* **动作是推导出来的，不是下发出去的**：组件把所有气泡的 `motion` 按优先级聚合成一个动作（表与参考实现 `bubble-tracker.ts` 的 `STATUS_PRIORITY` 一致：等待 60 > 出错 50 > 失败 45 > 待审阅 40 > 工作中 30 > 整理中 25 > 思考中 20 > 运行中 12 > 完成 10），声明式交给渲染器 —— 多会话并发时宿主不必自己算优先级；气泡在，动作就在；气泡收起，动作自动回落（成功动画会自己播完，不会因为气泡 3s 超时被掐断）。
+* **超时只给终态档**：`success` 3000 / `danger` 4000 到点自收，`default`（工作进行中）与 `warning`（等待）常驻等状态变化 —— 与参考实现的 `scheduleHide` 同规则；`review` 那种「待审阅、过一会儿收」请显式传 `timeout: 2500`。
+* **状态压过闲聊**：出现非碎碎念气泡时碎碎念那条立即收起；插播（空闲风味动作 / 碎碎念动画）只在**纯待机**时播，状态动作一到就接手，不必等插播播完。加载态只挡**自动**碎碎念，手动 `pet.muttering(...)` / `pet.muttering.request()` 随时可用（说话优先：会先清掉状态气泡）。
 * **配图**：开启后组件从 `config.memes` 随机抽 1 张（不让模型选），把 `{ name, desc }` 放进事件载荷供宿主拼提示词，图片 URL 由宿主给。
 * **手动触发**：`pet.muttering.request()` 立即以 `reason: 'manual'` 再索取一句，绕过周期与首拍基线。
 * **失败静默**：`onMuttering` 抛错只 `console.warn`，不打断周期、不弹错误气泡。
@@ -232,6 +232,7 @@ export { Pet, useConfig, useControllablePet } from 'dsh-pet-component'
 | `hidden` | `boolean` | `false` | 隐藏元素而非卸载 DOM（保持媒体上下文常驻） |
 | `lookAtPointer` | `boolean` | `true` | *(仅 Codex v2)* `idle` 状态下根据指针方向选择视线帧 |
 | `lookDeadzone` | `number` | `24` | *(仅 Codex)* 视线选择死区半径 (px) |
+| `lookRadius` | `number` | `max(宽,高) × 1.25` | *(仅 Codex)* 视线作用半径 (px)；出界即回待机帧 |
 | `hitboxRef` | `Ref<HTMLDivElement>` | — | 绑定命中框 DOM Ref |
 | `onHitboxPointerDown / Up / Cancel` | `(e: PointerEvent) => void` | — | 命中框指针原生地事件透传回调 |
 | `onMotionChange` | `(motion: PetRenderMotion) => void` | — | 实际动作变更回调（包含自动回落 `idle`） |

@@ -116,7 +116,6 @@ export interface PetBubble {
   loading: boolean;
   variant: PetBubbleVariant;
   motion?: MotionInput;
-  restore: boolean;
   placement: PetBubblePlacement;
   kind: PetBubbleKind;
   duration: number;
@@ -136,7 +135,6 @@ export interface PetBubbleOptions {
   loading?: boolean;
   variant?: PetBubbleVariant;
   motion?: MotionInput;
-  restore?: boolean;
   timeout?: number;
   placement?: PetBubblePlacement;
   kind?: PetBubbleKind;
@@ -197,6 +195,7 @@ export interface PetProps extends PetCommonProps {
   };
   lookAtPointer?: boolean;
   lookDeadzone?: number;
+  lookRadius?: number;
   muttering?: boolean;
   mutteringPrompt?: string;
   mutteringIntervalSec?: number;

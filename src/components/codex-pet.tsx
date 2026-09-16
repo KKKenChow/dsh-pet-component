@@ -6,6 +6,7 @@ import {
   CODEX_DEFAULT_SIZE,
   CODEX_FRAME_HEIGHT,
   CODEX_FRAME_WIDTH,
+  CODEX_LOOK_RADIUS_FACTOR,
   CODEX_MOTION_ACTION,
   isCodexLookSupported,
   resolveCodexColumns,
@@ -85,6 +86,7 @@ export function CodexPet(props: CodexPetProps) {
     style,
     lookAtPointer = true,
     lookDeadzone = 24,
+    lookRadius,
     onMotionChange,
     onAnimationChange,
     onReady,
@@ -165,6 +167,7 @@ export function CodexPet(props: CodexPetProps) {
 
   const lookSupported = lookAtPointer
     && !reducedMotion
+    && !dragging
     && state.type === 'idle'
     && state.loop
     && isCodexLookSupported(config)
@@ -176,6 +179,8 @@ export function CodexPet(props: CodexPetProps) {
   lookSupportedRef.current = lookSupported
   const lookDeadzoneRef = useRef(lookDeadzone)
   lookDeadzoneRef.current = lookDeadzone
+  const lookRadiusRef = useRef(lookRadius)
+  lookRadiusRef.current = lookRadius
 
   useEventListener('pointermove', (event: PointerEvent) => {
     if (!lookSupportedRef.current)
@@ -186,8 +191,24 @@ export function CodexPet(props: CodexPetProps) {
     const rect = element.getBoundingClientRect()
     const offsetX = event.clientX - (rect.left + rect.width / 2)
     const offsetY = event.clientY - (rect.top + rect.height / 2)
+    // 作用半径：指针离宠物太远就直接回到待机帧。旧实现没有上界，指针停在屏幕任何角落都会
+    // 把宠物钉在一个 look 格上，`pointermove` 之后再也不回 idle。
+    const radius = lookRadiusRef.current ?? Math.max(rect.width, rect.height) * CODEX_LOOK_RADIUS_FACTOR
+    if (Math.hypot(offsetX, offsetY) > radius) {
+      // 同值更新会被 React 跳过，不会造成额外渲染
+      setLookIndex(undefined)
+      return
+    }
     setLookIndex(resolveLookIndex({ x: offsetX, y: offsetY }, lookDeadzoneRef.current))
   }, { passive: true })
+
+  // 指针离开整窗（`pointerout` 且无 relatedTarget）或窗口失焦时也回到待机：
+  // 这两条路之后不会再收到 pointermove，不主动清就会把最后一格 look 永久留在画面上。
+  useEventListener('pointerout', (event: PointerEvent) => {
+    if (event.relatedTarget === null)
+      setLookIndex(undefined)
+  }, { passive: true })
+  useEventListener('blur', () => setLookIndex(undefined), { passive: true })
 
   // 不支持的场合（v1 图集 / 非 idle / 减少动效）直接忽略 last look，无需回到 effect 里清状态
   const effectiveLookIndex = lookSupported ? lookIndex : undefined

@@ -46,26 +46,20 @@ export interface PetBubbleOptions {
   /** 语义色，缺省 `default` */
   variant?: PetBubbleVariant
   /**
-   * 捆绑运行动画：气泡**创建**时下发一次 `pet.motion(motion)`；收起时按 `restore` 回落。
+   * 捆绑运行动画（会话档位 → `Motion`）。
    *
-   * 档位优先级与合并留在宿主（参考实现见 bubble-tracker 的 `STATUS_PRIORITY`），
-   * 组件不做聚合判定。
+   * 组件把**所有**气泡的 `motion` 按优先级聚合成一个动作，**声明式**交给渲染器的
+   * `motion` prop（表见 `BUBBLE_MOTION_PRIORITY`，与参考实现 `bubble-tracker.ts` 的
+   * `STATUS_PRIORITY` 同表）—— 所以：
+   * - 多会话并发时宿主不必自己算优先级，每条气泡带上自己的档位即可；
+   * - 气泡在，动作就在；气泡收起，动作自动回落（没有 `clear` 这回事）。
    */
   motion?: MotionInput
   /**
-   * 收起时是否 `pet.clear()` 回落 `motion` prop，**缺省 `false`**（不动动作）。
-   *
-   * 缺省不动动作是照抄 desktop 的语义：气泡与终结动作的生命周期**解耦**
-   * （成功 toast 3s 消失，终结动作还会多留 `TERMINAL_PULSE_TTL = 10s`），
-   * 所以气泡收起不会掐断正在播的动画。
-   *
-   * 收起时的完整规则：当前动作若不是本气泡下发的 → 什么都不做；是本气泡下发的 → 先交还给
-   * 队列里**最新的那条带 `motion` 的气泡**；没有别的气泡接手时，`true` 才会真的 `clear()`。
-   */
-  restore?: boolean
-  /**
    * 自动收起时长 ms；`0` = 常驻。
-   * 缺省按 `variant`：`success` 3000 / `warning` 2500 / `danger` 4000 / `default` 常驻。
+   *
+   * 缺省按 `variant`：`success` 3000 / `danger` 4000，`default` 与 `warning` 常驻
+   * （对齐参考实现的 `scheduleHide`：只有终态档排计时器；`review` 语义的 2500 请显式传）。
    */
   timeout?: number
   /** 相对宠物的方向，缺省 `top` */
@@ -88,7 +82,6 @@ export interface PetBubble {
   loading: boolean
   variant: PetBubbleVariant
   motion?: MotionInput
-  restore: boolean
   placement: PetBubblePlacement
   kind: PetBubbleKind
   /** 已解析的自动收起时长 ms（`0` = 常驻） */

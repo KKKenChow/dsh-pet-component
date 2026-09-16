@@ -125,7 +125,11 @@ export function createMutteringController(options: MutteringControllerOptions): 
     }
   }
 
-  /** 挂起（有加载态气泡）时整体禁用：不触发、不展示，也不消费「首拍」状态 */
+  /**
+   * 挂起（有加载态气泡）只影响**自动**周期：手动 `pet.muttering(...)` / `request()` 永远可用。
+   *
+   * 对齐 dsh-pet：`whisperEnabled` 只关自动轮询，手动触发不受该字段限制。
+   */
   const suspended = (): boolean => disposed || options.isSuspended?.() === true
 
   const tick = (): void => {
@@ -138,15 +142,16 @@ export function createMutteringController(options: MutteringControllerOptions): 
   }
 
   const request = (): void => {
-    if (suspended())
+    if (disposed)
       return
-    started = true
+    // 手动索取不算「首拍」：`started` 只由**周期**推进，恢复后的第一次周期仍然只记基线
+    // （对齐 dsh-pet：手动触发与自动轮询各走各的，轮询的 hasBaseline 不受手动影响）
     baselinePending = false
     emit('manual')
   }
 
   const show = (text: string, showOptions?: PetMutteringShowOptions): void => {
-    if (suspended())
+    if (disposed)
       return
     const value = String(text ?? '').trim()
     if (value === '')

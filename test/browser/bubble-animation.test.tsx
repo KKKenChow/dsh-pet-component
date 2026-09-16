@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { PetBubble } from '../../src/types'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
@@ -104,5 +105,40 @@ describe('非最前那条的内容不可见', () => {
     await vi.waitFor(() => {
       expect(getComputedStyle(promoted).opacity).toBe('1')
     }, { timeout: 2000 })
+  })
+})
+
+/**
+ * 度量：宽度跟着宠物走（用户认可），但**正文不能跟着缩到看不清**。
+ *
+ * desktop 的 toast 正文是固定 14px（HeroUI `.toast__title` 的 `text-sm`），只有宽度跟着窄窗
+ * （`source/deepseek-harness-desktop/src/pet/main.css` 的 `.toast-region { width: calc(90vw - 2rem) }`）。
+ * 这两条守住「宠物一小，整条 toast 连字号一起缩下去」这个真实回归。
+ */
+describe('气泡度量', () => {
+  it('宠物很小时字号/内边距/图标停在下界，不再缩成 11px / 6·8px', async () => {
+    const { container } = await render(
+      <div style={{ '--dsh-pet-size': '200px' } as CSSProperties}>
+        <PetBubbleLayer bubbles={[bubble('a', 1, { title: '标题', description: '正文' })]} />
+      </div>,
+    )
+    const style = getComputedStyle(query(container, '.dsh-pet__bubble'))
+
+    expect(style.fontSize).toBe('13px')
+    expect(style.lineHeight).toBe('19px')
+    expect(style.paddingTop).toBe('10px')
+    expect(style.paddingLeft).toBe('14px')
+    expect(getComputedStyle(query(container, '.dsh-pet__bubble-indicator svg')).width).toBe('14px')
+  })
+
+  it('默认 462px 画布上正好是参考实现的尺寸（text-sm / leading-5 / px-4 py-3）', async () => {
+    const { container } = await render(<PetBubbleLayer bubbles={[bubble('a', 1, { title: '标题' })]} />)
+    const style = getComputedStyle(query(container, '.dsh-pet__bubble'))
+
+    expect(style.fontSize).toBe('14px')
+    expect(style.lineHeight).toBe('20px')
+    expect(style.paddingTop).toBe('12px')
+    expect(style.paddingLeft).toBe('16px')
+    expect(getComputedStyle(query(container, '.dsh-pet__bubble-indicator svg')).width).toBe('16px')
   })
 })

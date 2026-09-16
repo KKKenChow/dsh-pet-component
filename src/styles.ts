@@ -114,15 +114,17 @@ const style = c([
     boxSizing: 'border-box',
     display: 'flex',
     alignItems: 'flex-start',
-    gap: scaled(0.013, '4px', '6px'),
+    gap: scaled(0.013, '5px', '6px'),
     minWidth: 'min(calc(var(--dsh-pet-size, 462px) * 0.92), calc(100vw - 2rem))',
     maxWidth: 'calc(100vw - 2rem)',
-    padding: `${scaled(0.026, '6px', '12px')} ${scaled(0.0346, '8px', '16px')}`,
-    borderRadius: 'min(24px, calc(var(--dsh-pet-size, 462px) * 0.052))',
+    // 度量下界贴着参考实现的固定值（见 `scaled()` 的说明）：字号 13px、内边距 10/14px、
+    // 圆角 16px、图标 14px —— 宠物小的时候整条 toast 不再跟着缩到看不清
+    padding: `${scaled(0.026, '10px', '12px')} ${scaled(0.0347, '14px', '16px')}`,
+    borderRadius: 'min(24px, max(16px, calc(var(--dsh-pet-size, 462px) * 0.052)))',
     background: 'var(--surface, #ffffff)',
     color: 'var(--overlay-foreground, #18181b)',
-    fontSize: scaled(0.0303, '11px', '14px'),
-    lineHeight: scaled(0.0433, '16px', '20px'),
+    fontSize: scaled(0.0304, '13px', '14px'),
+    lineHeight: scaled(0.0433, '19px', '20px'),
     pointerEvents: 'none',
     boxShadow: 'var(--shadow-overlay, 0 10px 30px rgba(0, 0, 0, 0.16))',
     // 运动学照抄 HeroUI v3 的 `.toast`：`transform` 250ms、`opacity` 150ms（进场 350ms，
@@ -193,13 +195,13 @@ const style = c([
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: '0',
-    padding: scaled(0.0087, '2px', '4px'),
+    padding: scaled(0.0087, '3px', '4px'),
     color: 'var(--overlay-foreground, #18181b)',
     userSelect: 'none',
   }),
   c('.dsh-pet__bubble-indicator svg', {
-    width: scaled(0.0346, '12px', '16px'),
-    height: scaled(0.0346, '12px', '16px'),
+    width: scaled(0.0347, '14px', '16px'),
+    height: scaled(0.0347, '14px', '16px'),
   }),
   c('.dsh-pet__bubble-spinner', {
     animation: 'dsh-pet-bubble-spin 700ms linear infinite',
@@ -209,16 +211,16 @@ const style = c([
   }),
   // 标题（HeroUI `.toast__title`：text-sm / leading-5 / medium）
   c('.dsh-pet__bubble-title', {
-    fontSize: scaled(0.0303, '11px', '14px'),
-    lineHeight: scaled(0.0433, '16px', '20px'),
+    fontSize: scaled(0.0304, '13px', '14px'),
+    lineHeight: scaled(0.0433, '19px', '20px'),
     fontWeight: '500',
     color: 'var(--overlay-foreground, #18181b)',
     overflowWrap: 'anywhere',
   }),
   // 正文（HeroUI `.toast__description` = text-sm + muted；desktop 再叠一个 `line-clamp-2`）
   c('.dsh-pet__bubble-text', {
-    fontSize: scaled(0.0303, '11px', '14px'),
-    lineHeight: scaled(0.0433, '16px', '20px'),
+    fontSize: scaled(0.0304, '13px', '14px'),
+    lineHeight: scaled(0.0433, '19px', '20px'),
     color: 'var(--muted, #71717a)',
     display: '-webkit-box',
     WebkitBoxOrient: 'vertical',
@@ -267,8 +269,14 @@ const style = c([
 
 /**
  * 气泡度量的缩放：desktop 的 toast 是按 **462px 画布**设计的（HeroUI `--toast-width = 460`），
- * 直接照搬会比宠物大出一圈 —— 所以按 `--dsh-pet-size`（`Pet` 实测的宠物宽度）等比缩放，
- * 并夹在 `min`~`max` 的可读区间内（小宠物上字号不会缩到看不清，大宠物上不会涨得夸张）。
+ * 直接照搬会比宠物大出一圈 —— 所以按 `--dsh-pet-size`（`Pet` 实测的宠物宽度）等比缩放。
+ *
+ * 但**下界必须贴着参考实现的固定度量，不能往下缩**：desktop 的 toast 正文是固定 14px
+ * （`.toast__title` 的 `text-sm` + `leading-5`），只有宽度跟着那个窄窗走
+ * （`source/deepseek-harness-desktop/src/pet/main.css` 的 `.toast-region { width: calc(90vw - 2rem) }`）。
+ * 早期版本把下界放得太低（字号 11px / 内边距 6·8px / 图标 12px），宠物一小整条 toast 就跟着
+ * 缩成一小块、正文看不清（用户报告）。现在的缩放带很窄（字号 13~14px 等），
+ * 实际观感≈参考实现的固定尺寸，大宠物上才用得满。
  *
  * 用函数声明（会被提升），所以能写在 `c([...])` 下面又被上面引用。
  */

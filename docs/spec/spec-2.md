@@ -431,6 +431,8 @@ pnpm dev:playground                        # 手动验收：叠加 / 更新 / �
    圆角 `min(24px, 5.2%)`、图标 `clamp(12px, 3.46%, 16px)`、气泡宽 `min(92%, 100vw - 2rem)`、
    配图 `min(26%, 120px)`。层叠间距同样是 `clamp(6px, 2.6%, 12px)`，位移写成行内
    `calc(clamp(...) * index)`，所以跟着宠物一起缩放。
+   （**下界已由 §17.6 取代**：这里的 11px 字号 / 6·8px 内边距 / 12px 图标在桌面上偏小、
+   正文看不清；下界已抬到参考实现的固定度量附近。）
 
 ---
 
@@ -702,3 +704,38 @@ const effectiveMotion = bubbleMotion ?? motion        // 声明式，交给渲�
 **为什么组件/钩子必须在真浏览器里测**：覆盖率缺口的大头在 `src/components/**` 与
 `src/hooks/**`（两块合计约 2000 行），而它们的行为几乎都由「真实过渡 / 真实媒体事件 /
 真实副作用顺序」决定 —— 气泡退场的那个根因（§17.2）就是只有真浏览器才暴露出来的。
+
+### 17.6 气泡度量的下界抬到参考实现的固定值（「桌面上 toast 太小、正文看不清」）
+
+用户反馈：**宽度跟着宠物走没问题，但桌面上那条 toast 显得偏小、正文看不清。**
+
+根因不在宽度，在**下界**。`scaled(ratio, min, max)`（`src/styles.ts`）把度量夹在
+`clamp(min, calc(var(--dsh-pet-size, 462px) * ratio), max)` 里，其中 `max` 恰好就是参考实现的
+固定度量（正文与标题 14px / `leading-5` 20px、内边距 12·16px、图标 16px、间距 6px、圆角 24px），
+但 `min` 放得太低（字号 11px、内边距 6·8px、图标 12px、间距 4px）。宠物宽度一旦低于约 462px
+（desktop 那个窄窗里的桌宠就是这样），整条 toast 连字号一起缩到下界，正文只剩 11px。
+
+对照参考实现能看出「文字本来就不该跟着缩」：desktop 的桌宠 toast 正文是**固定** 14px
+（HeroUI `.toast__title` 的 `text-sm` + `leading-5`），只有**宽度**跟着那个窄窗走 ——
+`source/deepseek-harness-desktop/src/pet/main.css` 只覆盖了 `.toast-region--top-end { top: 0 }`
+与 `.toast-region { width: calc(90vw - 2rem) }`，以及正文的 `-webkit-line-clamp: 2`，
+并没有任何按宠物缩放字号的逻辑。
+
+现在把下界全部抬到参考实现的固定度量附近，缩放带收得很窄（实际观感≈固定尺寸，大宠物上才用满）：
+
+| 度量 | 旧下界 → 上限 | 现在（下界 → 上限） |
+| --- | --- | --- |
+| 正文 / 标题字号 | 11px → 14px | `clamp(13px, 3.04%, 14px)` |
+| 正文 / 标题行高 | 16px → 20px | `clamp(19px, 4.33%, 20px)` |
+| 内边距 | 6px / 8px → 12px / 16px | `clamp(10px, 2.6%, 12px)` / `clamp(14px, 3.47%, 16px)` |
+| 图标 | 12px → 16px | `clamp(14px, 3.47%, 16px)` |
+| 图标槽内边距 | 2px → 4px | `clamp(3px, 0.87%, 4px)` |
+| 内容间距 | 4px → 6px | `clamp(5px, 1.3%, 6px)` |
+| 圆角 | `min(24px, 5.2%)` | `min(24px, max(16px, 5.2%))` |
+
+比例也顺手校正了一格（`3.03% → 3.04%`、`3.46% → 3.47%`）：`calc(462px * 3.03%)` = 13.9986px，
+永远取不到 14px 的整数上界，`3.46%` 同理落在 15.985px。「差一点点」正是新增的度量用例抓出来的。
+宽度维持 `min(92%, 100vw - 2rem)` 不变 —— 用户明确认可「宽度跟随宠物」。
+
+回归守卫在 `test/browser/bubble-animation.test.tsx`：`--dsh-pet-size: 200px` 时字号必须是 13px、
+内边距 10px / 14px、图标 14px；默认 462px 画布上必须**正好**是参考实现的 14px / 20px / 12px / 16px。

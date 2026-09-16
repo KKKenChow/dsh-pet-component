@@ -159,19 +159,22 @@ describe('createBubbleTracker', () => {
     expect(motions.at(-1)).toBeUndefined()
   })
 
-  it('failed：气泡留 4s 读，动作 1.8s 就回落（FAILED_PULSE_TTL）', () => {
+  it('failed：气泡 4s 收起，动作留 10s 让动画自己播完（与 success 同一套语义）', () => {
     const { tracker, motions, flush, advance } = setup()
     tracker.show({ id: 'f', description: '失败', motion: 'failed' })
     flush()
     expect(motions.at(-1)).toBe('failed')
 
-    advance(1800)
+    // 4s：气泡到点收起，动作**不该**跟着断（否则动画被掐在半截）
+    advance(4000)
+    expect(tracker.bubbles).toHaveLength(0)
+    flush()
+    expect(motions.at(-1)).toBe('failed')
+
+    // 10s：窗口到期 → 回落 motion prop
+    advance(6000)
     flush()
     expect(motions.at(-1)).toBeUndefined()
-    // 气泡仍在（FAILED_BUBBLE_TIMEOUT = 4s）
-    expect(tracker.bubbles).toHaveLength(1)
-    advance(2200)
-    expect(tracker.bubbles).toHaveLength(0)
   })
 
   it('同一档位重复上报不重起窗口；换档位则重新起', () => {

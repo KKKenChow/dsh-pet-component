@@ -27,7 +27,7 @@ describe('常量表', () => {
   })
 
   it('终态档的聚合保持窗口 = FAILED_PULSE_TTL / TERMINAL_PULSE_TTL', () => {
-    expect(BUBBLE_TERMINAL_PULSE_TTL).toEqual({ failed: 1800, error: 10000, success: 10000 })
+    expect(BUBBLE_TERMINAL_PULSE_TTL).toEqual({ failed: 10000, error: 10000, success: 10000 })
   })
 
   it('优先级表覆盖 15 个动作槽（14 动作 + 手势态 dragging）', () => {
@@ -73,7 +73,7 @@ describe('档位判定', () => {
     // review 有 2.5s 收起时长，但没有聚合窗口 —— 与其他会话并存时照常参与聚合
     expect(hasPulseWindow('review')).toBe(false)
     expect(terminalPulseTtlOf('review')).toBe(0)
-    expect(terminalPulseTtlOf('failed')).toBe(1800)
+    expect(terminalPulseTtlOf('failed')).toBe(10000)
     expect(terminalPulseTtlOf('success')).toBe(10000)
   })
 

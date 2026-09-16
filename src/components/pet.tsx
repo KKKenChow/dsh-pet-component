@@ -195,26 +195,36 @@ export function Pet(props: PetProps) {
   /** 按动画名的一次性插播（dsh 渲染器专用通道，见 `DshPetProps.adHocAnimation`） */
   const [adHocAnimation, setAdHocAnimation] = useState<{ name: string, seq: number } | null>(null)
   const adHocSeqRef = useRef(0)
-  /**
-   * 正在插播的碎碎念动画名（`null` = 没在插播）。
-   *
-   * 碎碎念气泡跟着它走：渲染器回报的动画不再是这一条（播完回落 / 被别的动画接管）就收起气泡 ——
-   * 也就是「气泡随动画消失」；`mutteringDuration`（缺省 10s）因此退化成宿主可调的硬上限。
-   */
-  const whisperAnimationRef = useRef<string | null>(null)
+  /** 气泡队列的镜像：渲染器回调里要读最新队列，而那个回调的身份必须稳定（见下） */
+  const bubblesRef = useRef<readonly PetBubble[]>(bubbles)
+  bubblesRef.current = bubbles
+  /** 渲染器上一次回报的动画：用来判断「一次性动画播完了」 */
+  const lastAnimationRef = useRef<{ name?: string, once?: boolean } | null>(null)
 
   /**
-   * 渲染器回报的动画变化：碎碎念插播结束后收气泡，宿主自己的 `onAnimationChange` 原样透传。
+   * 渲染器回报的动画变化：**一次性动画播完，就收掉驱动它的那条气泡**。
    *
-   * 用 `useCallback` 钉住身份：渲染器把这个回调放进了 effect 依赖，每次渲染换新函数会让
-   * 它每帧回报一次（宿主若在回调里 setState 就会自激）。
+   * 一次性动画的来源有两种：碎碎念插播（`events.whisper` 里那一段）与终态档
+   * （`success` / `failed` / `error` / `review`）的一次性动作。它们播完时渲染器会把动画换掉，
+   * 这一刻气泡跟着收 —— 于是不会再出现「气泡还挂着、动画先没了」（用户报告），
+   * 也不会出现「气泡比动画多赖几秒」。碎碎念的 `mutteringDuration` 与终态档时长退化成
+   * 硬上限（动画没播出来的场合由它们兜底）。
+   *
+   * 用 `useCallback` 钉住身份：渲染器把它放进了 effect 依赖，每次渲染换新函数会让它每帧
+   * 回报一次（宿主若在回调里 setState 就会自激）。
    */
   const hostAnimationChange = common.onAnimationChange
   const handleAnimationChange = useCallback((info: Parameters<NonNullable<PetProps['onAnimationChange']>>[0]) => {
-    const whisper = whisperAnimationRef.current
-    if (whisper !== null && info?.name !== whisper) {
-      whisperAnimationRef.current = null
-      bubbleHandleRef.current?.close(MUTTERING_BUBBLE_ID)
+    const previous = lastAnimationRef.current
+    lastAnimationRef.current = info === null ? null : { name: info.name, once: info.once }
+    if (previous?.once === true && info?.name !== previous.name) {
+      const current = bubblesRef.current
+      // **只收碎碎念那条** —— 它本来就该跟插播动画同长。
+      // 终态档（success / failed / error / review）**不跟着动画收**：它们由自己的时长 / 脉冲窗口
+      // 管着；绑到「动画播完」会让「更新为失败」的气泡在动画一播完就消失，4s 阅读时间白给
+      // （成功那条只是碰巧动画长度≈3s，才看不出问题）。
+      if (current.some(bubble => bubble.id === MUTTERING_BUBBLE_ID))
+        bubbleHandleRef.current?.close(MUTTERING_BUBBLE_ID)
     }
     hostAnimationChange?.(info)
   }, [hostAnimationChange])
@@ -235,14 +245,12 @@ export function Pet(props: PetProps) {
     // 走渲染器的一次性插播通道）；池为空（Codex 图集 / 配置没写）时回落 `mutteringMotion`
     onPlay: (name) => {
       if (name === undefined) {
-        whisperAnimationRef.current = null
         const fallback = mutteringMotion ?? 'waving'
         motionRequest(typeof fallback === 'string'
           ? { type: fallback, replay: true }
           : { ...fallback, replay: true })
         return
       }
-      whisperAnimationRef.current = name
       adHocSeqRef.current += 1
       setAdHocAnimation({ name, seq: adHocSeqRef.current })
     },

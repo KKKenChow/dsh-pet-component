@@ -371,6 +371,10 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
       : `dsh-pet-bubble-${++autoId}`
     touchedId = id
     const session: TrackedSession = { ...sessions.get(id), ...options_, id }
+    // 宿主这次给了状态（`loading` / `motion`）却没给语义色 → 语义色跟着状态重算，**不继承**
+    // 上一次的：否则「失败之后点加载」会带着 danger 回来（参考实现里 variant 本就是状态的派生量）。
+    if (options_.variant === undefined && (options_.loading !== undefined || options_.motion !== undefined))
+      session.variant = undefined
     sessions.set(id, session)
     trackTerminalPulse(session)
     syncBubble(session)

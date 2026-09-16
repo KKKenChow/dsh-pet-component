@@ -38,13 +38,14 @@ export const BUBBLE_TERMINAL_TIMEOUT: Partial<Record<PetRenderMotion, number>> =
  *
  * 上游注释原文（同一份用户报告）：成功终态动画（如雀跃庆祝）实际播放时长超过
  * `SUCCESS_TOAST_TIMEOUT`(3s)，聚合状态提前回落会让动画被掐在半截。所以：
- * `success` / `error` 保持 `TERMINAL_PULSE_TTL = 10000`，`failed` 用
- * `FAILED_PULSE_TTL = 1800`（失败动画很短，不需要 10s）。
+ * `success` / `error` 保持 `TERMINAL_PULSE_TTL = 10000`。
  *
- * 气泡自身仍按 `BUBBLE_TERMINAL_TIMEOUT` 独立收起，二者互不影响。
+ * `failed` 上游给的是 `FAILED_PULSE_TTL = 1800`，在本组件里站不住：失败的动画同样比它自己的
+ * 气泡长，1.8s 就把状态撤掉 = 当场从失败动画跳回待机（用户报告「气泡还没消失，动画先消失了」）。
+ * 所以三个终态档统一 10000 —— 与成功那条完全同一套语义：**气泡按时长自己收，动画自己播完**。
  */
 export const BUBBLE_TERMINAL_PULSE_TTL: Partial<Record<PetRenderMotion, number>> = {
-  failed: 1800,
+  failed: 10000,
   error: 10000,
   success: 10000,
 }
@@ -147,7 +148,31 @@ export function resolveBubbleTimeout(input: { motion?: MotionInput, timeout?: nu
 }
 
 /**
- * 语义色：显式给的优先；否则**加载态一律是 `default`（Info）**。
+ * 档位 → 默认语义色（参考实现 `toastContent` 里 `variant` 就是状态的派生量，这里反过来用）：
+ * `waiting` / `review` → warning、`failed` / `error` → danger、`success` → success、
+ * 其余工作档（thinking / working / result / running）→ default；空闲类档位没有状态 → `undefined`。
+ *
+ * 有了它，「只换了状态、没给语义色」也能自动落到对应颜色（加载态 → Info、完成 → success），
+ * 不会把上一条的 danger 一路继承下去。
+ */
+export function variantOfMotion(input: MotionInput | undefined): PetBubbleVariant | undefined {
+  const type = motionType(input)
+  if (type === undefined)
+    return undefined
+  if (type === 'waiting' || type === 'review')
+    return 'warning'
+  if (type === 'failed' || type === 'error')
+    return 'danger'
+  if (type === 'success')
+    return 'success'
+  if (type === 'idle' || type === 'turn' || type === 'waving' || type === 'moving-left' || type === 'moving-right' || type === 'dragging')
+    return undefined
+  return 'default'
+}
+
+/**
+ * 语义色：显式给的优先；否则**加载态一律是 `default`（Info）**；再否则用调用方按状态算出的
+ * 默认色（见 `variantOfMotion`）。
  *
  * 对齐参考实现的 `toastContent`：`isLoading` 只出现在 `running` / `thinking` /
  * `working` / `result` 这几档，而它们的 `variant` 全是 `default`。所以「更新为警告后
@@ -173,7 +198,7 @@ export function createBubble(options: PetBubbleOptions, id: string, created: num
     icon: options.icon,
     image: options.image,
     loading,
-    variant: resolveBubbleVariant(loading, options.variant, 'default'),
+    variant: resolveBubbleVariant(loading, options.variant, variantOfMotion(options.motion) ?? 'default'),
     motion: options.motion,
     placement: options.placement ?? 'top',
     kind: options.kind ?? 'bubble',
@@ -203,7 +228,8 @@ export function updateBubble(previous: PetBubble, options: PetBubbleOptions): Pe
     id: previous.id,
     created: previous.created,
     loading,
-    variant: resolveBubbleVariant(loading, options.variant, previous.variant),
+    // 本次给了状态（motion）就按状态重算语义色，否则保留上一条的
+    variant: resolveBubbleVariant(loading, options.variant, variantOfMotion(motion) ?? previous.variant),
     placement: merged.placement ?? previous.placement,
     kind: merged.kind ?? previous.kind,
     duration: resolveUpdatedDuration(previous, options, motion),

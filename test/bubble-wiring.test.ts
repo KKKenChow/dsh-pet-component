@@ -100,4 +100,25 @@ describe('气泡接线', () => {
     onAnimationChange('待机呼吸休闲') // 播完回落：收起
     expect(tracker.bubbles).toHaveLength(0)
   })
+
+  it('失败之后点加载：语义色跟着状态回到 Info，不继承上一条的 danger', () => {
+    const { tracker } = harness()
+    tracker.show({ id: 'demo', title: '会话', description: '写入失败：权限不足', variant: 'danger', motion: 'failed' })
+    expect(tracker.bubbles[0]?.variant).toBe('danger')
+    expect(tracker.bubbles[0]?.duration).toBe(4000)
+
+    // 「加载」按钮：同一个 id，只给状态、不给语义色
+    tracker.show({ id: 'demo', title: '会话', description: '正在分析代码…', loading: true, motion: 'thinking' })
+    expect(tracker.bubbles[0]?.variant).toBe('default')
+    expect(tracker.bubbles[0]?.duration).toBe(0)
+    expect(tracker.bubbles[0]?.loading).toBe(true)
+  })
+
+  it('只给档位、不给语义色：颜色按档位推导（success → success）', () => {
+    const { tracker } = harness()
+    tracker.show({ id: 's', title: '会话', description: '分析完成', motion: 'success' })
+    expect(tracker.bubbles[0]?.variant).toBe('success')
+    tracker.show({ id: 's', title: '会话', description: '换了句文字' })
+    expect(tracker.bubbles[0]?.variant).toBe('success')
+  })
 })

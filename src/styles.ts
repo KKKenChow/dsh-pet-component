@@ -125,11 +125,18 @@ const style = c([
     lineHeight: scaled(0.0433, '16px', '20px'),
     pointerEvents: 'none',
     boxShadow: 'var(--shadow-overlay, 0 10px 30px rgba(0, 0, 0, 0.16))',
+    // 运动学照抄 HeroUI v3 的 `.toast`：`transform` 250ms、`opacity` 150ms（进场 350ms，
+    // 见 `--entering`）；被顶到最前只变 translate/scale，不会重播淡入
+    transition: 'opacity 150ms ease, translate 250ms ease, scale 250ms ease',
   }),
-  // 最前那条（= 最新的一条，完整尺寸）才淡入 —— 它按需挂载，没有常驻节点可以切 `.is-on`
+  // 刚挂载的那条才淡入（挂载时挂 `--entering`）—— 它按需挂载，没有常驻节点可以切 `.is-on`。
+  // 刻意**不加 `fill-mode: both`**：填充值会压过 `--leaving` 的 `opacity: 0`，退场就淡不出去。
+  c('.dsh-pet__bubble--entering', {
+    animation: 'dsh-pet-bubble-in 350ms ease',
+  }),
+  // 最前那条（= 最新的一条）只负责层级
   c('.dsh-pet__bubble--front', {
     zIndex: '1',
-    animation: 'dsh-pet-bubble-in 250ms ease both',
   }),
   // 被压在后面的那几条：高度取最前那条 + 裁剪（HeroUI `.toast:not([data-frontmost=true])` 的
   // `height: var(--front-height); overflow: hidden`），位移与缩放由行内 style 按 index 给
@@ -140,7 +147,24 @@ const style = c([
     right: '0',
     height: '100%',
     overflow: 'hidden',
-    transition: 'translate 250ms ease, scale 250ms ease, opacity 250ms ease',
+    transition: 'opacity 150ms ease, translate 250ms ease, scale 250ms ease',
+  }),
+  // 非最前那条的**内容**不可见（HeroUI `.toast:not([data-frontmost=true]) > * { opacity: 0 }`）。
+  // 没有这条，被顶到最前时整块内容会「啪」地出现 —— 观感就是闪一下。
+  c('.dsh-pet__bubble--stacked > *', {
+    opacity: '0',
+    transition: 'opacity 200ms ease',
+  }),
+  // 退场：整块朝**背离宠物**的方向滑出 + 淡出（HeroUI `.toast[data-exiting][data-frontmost]`
+  // 的 `--toast-enter: -100%` 配 `--dir: ±1`）。层叠那几条只淡出（scale 是行内值）
+  c('.dsh-pet__bubble--leaving', {
+    opacity: '0',
+  }),
+  c('.dsh-pet__bubbles--top .dsh-pet__bubble--leaving.dsh-pet__bubble--front', {
+    translate: '0 -100%',
+  }),
+  c('.dsh-pet__bubbles--bottom .dsh-pet__bubble--leaving.dsh-pet__bubble--front', {
+    translate: '0 100%',
   }),
   c('@keyframes dsh-pet-bubble-in', {
     from: {
@@ -235,7 +259,7 @@ const style = c([
     color: 'var(--danger-soft-foreground, var(--danger, #d94f3d))',
   }),
   c('@media (prefers-reduced-motion: reduce)', [
-    c('.dsh-pet__bubble', { animation: 'none' }),
+    c('.dsh-pet__bubble', { animation: 'none', transition: 'none' }),
     c('.dsh-pet__bubble--stacked', { transition: 'none' }),
     c('.dsh-pet__bubble-spinner', { animation: 'none' }),
   ]),

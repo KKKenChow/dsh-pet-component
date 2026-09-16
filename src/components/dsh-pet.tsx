@@ -178,6 +178,15 @@ export function DshPet(props: DshPetProps) {
     },
   })
 
+  // 动作换档（状态气泡下发的动作 / 宿主的 `pet.motion(...)`）要**抢占**正在播的一次性插播：
+  // 插播只是风味（空闲掷骰、碎碎念），状态优先 —— 否则状态动作会被插播挡住，直到它自己播完。
+  // 插播自身（`setAdHoc` / 外部 `adHocAnimation`）不推进 revision，所以不会把自己刚设的插播清掉。
+  const motionRevision = state.revision
+  useEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect -- 「换动作」是命令式信号，没有受控入口能表达它；这条 effect 就是要抢占正在播的插播
+    setAdHoc(null)
+  }, [motionRevision])
+
   /* --------------------------------- 播放目标 -------------------------------- */
 
   const playback = useMemo<DshPlayback | null>(() => {

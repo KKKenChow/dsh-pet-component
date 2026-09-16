@@ -199,7 +199,8 @@ pet.bubble.clear()
 
 * **首拍只记基线**：挂载后第一次到点以 `reason: 'baseline'` 通知宿主，且这期间推回的文本**不会展示**（对应 dsh-pet 的 `hasBaseline`，避免启动/刷新时重放旧句子）；`mutteringImmediate` 可关掉这个行为。
 * **宿主推回才展示**：组件不持有 Promise。`pet.muttering(text, { image?, duration? })` 从 `animations.events.whisper` 整池随机抽一段动画播放（避开上一段），并弹一条 10s 气泡；这句话走 `title`（说话语气、不占图标位），配图走 `image`；池为空时回落 `mutteringMotion`（缺省 `waving` —— Codex 图集走这条）。
-* **气泡与动画解耦**：气泡收起**不会**掐断正在播的动画（`restore` 缺省 `false`）。成功 toast 3s 消失、成功动画自己播完才回落，与 desktop 的 `TERMINAL_PULSE_TTL = 10s` 同思路；队列里还有别的气泡带着 `motion` 时，动作交给最新的那条。
+* **气泡与动画解耦**：气泡收起**不会**掐断正在播的动画（`restore` 缺省 `false`）。成功 toast 3s 消失、成功动画自己播完才回落，与 desktop 的 `TERMINAL_PULSE_TTL = 10s` 同思路；队列里还有别的气泡带着 `motion` 时动作交给最新的那条；**循环**动作（`thinking` / `working` …）不会自己结束，所以最后一条带动画的气泡收起时会主动回落，避免一直播下去。
+* **状态压过闲聊**：出现非碎碎念气泡时，碎碎念那条会立即收起（不会叠在状态气泡后面）；状态动作也会**抢占**正在播的一次性插播（空闲风味动作 / 碎碎念动画），不必等它播完。
 * **配图**：开启后组件从 `config.memes` 随机抽 1 张（不让模型选），把 `{ name, desc }` 放进事件载荷供宿主拼提示词，图片 URL 由宿主给。
 * **手动触发**：`pet.muttering.request()` 立即以 `reason: 'manual'` 再索取一句，绕过周期与首拍基线。
 * **失败静默**：`onMuttering` 抛错只 `console.warn`，不打断周期、不弹错误气泡。

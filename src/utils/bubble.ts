@@ -120,6 +120,19 @@ function motionStateKey(input: MotionInput): string {
 }
 
 /**
+ * 这条气泡下发的动作是不是**循环**动作（`thinking` / `working` / `running` / `waiting` …）。
+ *
+ * 循环动作不会自己结束，所以「气泡收起 + 没有别的气泡接手」时必须 `clear()` 回落，否则宠物
+ * 会一直播下去；一次性动作（`success` / `error` / 风味动作）相反 —— 让它自己播完再回落，
+ * 才不会把动画掐半截。
+ */
+export function isLoopingBubbleMotion(input: MotionInput | undefined): boolean {
+  if (input === undefined)
+    return false
+  return isLoopingMotion(typeof input === 'string' ? input : input.type)
+}
+
+/**
  * 从队列里挑出**最新的那条带捆绑动画的气泡** —— 某条气泡收起时把动作交还给谁。
  *
  * 队列是「旧 → 新」的顺序，而最新的一条在层叠里最靠前（`--front`），所以它才是动作的主人；

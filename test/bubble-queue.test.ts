@@ -3,6 +3,7 @@ import { createBubbleQueue } from '../src/hooks/use-pet-bubbles'
 import {
   BUBBLE_DEFAULT_TIMEOUT,
   createBubble,
+  isLoopingBubbleMotion,
   MAX_VISIBLE_BUBBLES,
   newestMotionBubble,
   resolveBubbleMotion,
@@ -277,5 +278,18 @@ describe('newestMotionBubble', () => {
     // 没有别的气泡带 motion → undefined（调用方因此不动动作）
     expect(newestMotionBubble([first, middle], 'a')).toBeUndefined()
     expect(newestMotionBubble([], 'a')).toBeUndefined()
+  })
+})
+
+describe('isLoopingBubbleMotion', () => {
+  it('循环动作为真、一次性动作与未给动作为假', () => {
+    expect(isLoopingBubbleMotion('thinking')).toBe(true)
+    expect(isLoopingBubbleMotion({ type: 'working' })).toBe(true)
+    expect(isLoopingBubbleMotion('waiting')).toBe(true)
+    // 一次性动作：让它自己播完再回落，不主动 clear
+    expect(isLoopingBubbleMotion('success')).toBe(false)
+    expect(isLoopingBubbleMotion({ type: 'waving' })).toBe(false)
+    expect(isLoopingBubbleMotion('turn')).toBe(false)
+    expect(isLoopingBubbleMotion(undefined)).toBe(false)
   })
 })

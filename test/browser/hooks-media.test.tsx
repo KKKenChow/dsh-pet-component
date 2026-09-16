@@ -262,18 +262,22 @@ describe('useCachedMediaUrl', () => {
     await vi.waitFor(() => {
       expect(first.result.current).toBe(source)
     })
-    await first.unmount()
 
-    // 后台写回真的落进了 IndexedDB（用同一个 store 与 key 观察）
+    // 后台写回真的落进了 IndexedDB（用同一个 store 与 key 观察）。
+    // **必须在卸载之前等它落地**：卸载会 `abort()` 在途抓取（见 use-cached-media.ts 的
+    // cleanup），写回就再也不会发生 —— 之前把卸载放在前面，快机器上抓取先跑完才侥幸通过，
+    // CI（windows + Node 26）上就成了随机红灯。等待也给足时间，抓的是真文件。
     await vi.waitFor(async () => {
       const stored = await get(MEDIA_CACHE_PREFIX + source)
       expect(stored).toBeTruthy()
-    })
+    }, { timeout: 5000 })
+
+    await first.unmount()
 
     const second = await renderHook(() => useCachedMediaUrl(source, true))
     await vi.waitFor(() => {
       expect(second.result.current).toMatch(/^blob:/)
-    })
+    }, { timeout: 5000 })
   })
 
   it('抓不下来（404）：onError 仅一次，地址仍然是原始地址（照播）', async () => {

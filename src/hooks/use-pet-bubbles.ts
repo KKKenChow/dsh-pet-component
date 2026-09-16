@@ -30,6 +30,13 @@ export interface BubbleQueueOptions {
   onChange?: (bubbles: readonly PetBubble[]) => void
   /** 新气泡入队时回调（捆绑运行动画在这里下发） */
   onShow?: (bubble: PetBubble) => void
+  /**
+   * 同 `id` 原地更新时回调（拿到更新前后两条）。
+   *
+   * 捆绑动画的「换档」在这里处理：宿主把加载态更新成完成态时，动画必须跟着换
+   * （见 `resolveBubbleMotion`），否则画面会停在加载态的动作上。
+   */
+  onUpdate?: (bubble: PetBubble, previous: PetBubble) => void
   /** 气泡收起时回调（含自动收起与上限淘汰；`restore` 回落在这里做） */
   onClose?: (bubble: PetBubble) => void
   /** 定时器注入（测试用；缺省全局 `setTimeout` / `clearTimeout`） */
@@ -148,9 +155,11 @@ export function createBubbleQueue(options: BubbleQueueOptions = {}): BubbleQueue
     const next = updateBubble(previous, input)
     items = [...items.slice(0, index), next, ...items.slice(index + 1)]
     touchedId = id
-    // 只有显式给 timeout 才重排计时：原地更新不打断自动收起
-    if (input.timeout !== undefined)
+    // 两种情况下重排计时：显式给了 timeout（`0` 也要能取消），或时长本身变了
+    // （语义色换档会带出新时长）。只换文字时计时不动，「可更新文字」不会打断自动收起
+    if (input.timeout !== undefined || next.duration !== previous.duration)
       armTimer(next)
+    options.onUpdate?.(next, previous)
     emit()
     return id
   }
@@ -176,6 +185,8 @@ export interface UsePetBubblesOptions {
   max?: number
   /** 新气泡入队时回调（组件内部用来下发捆绑动画） */
   onShow?: (bubble: PetBubble) => void
+  /** 同 `id` 原地更新时回调（组件内部用来处理动画换档） */
+  onUpdate?: (bubble: PetBubble, previous: PetBubble) => void
   /** 气泡收起时回调（组件内部用来做动画回落） */
   onClose?: (bubble: PetBubble) => void
 }
@@ -199,6 +210,8 @@ export function usePetBubbles(options: UsePetBubblesOptions = {}): UsePetBubbles
 
   const onShowRef = useRef(options.onShow)
   onShowRef.current = options.onShow
+  const onUpdateRef = useRef(options.onUpdate)
+  onUpdateRef.current = options.onUpdate
   const onCloseRef = useRef(options.onClose)
   onCloseRef.current = options.onClose
 
@@ -207,6 +220,7 @@ export function usePetBubbles(options: UsePetBubblesOptions = {}): UsePetBubbles
     max,
     onChange: setBubbles,
     onShow: bubble => onShowRef.current?.(bubble),
+    onUpdate: (bubble, previous) => onUpdateRef.current?.(bubble, previous),
     onClose: bubble => onCloseRef.current?.(bubble),
   })
   const queue = queueRef.current

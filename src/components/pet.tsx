@@ -8,6 +8,7 @@ import { useControllablePet } from '../hooks/use-controllable-pet'
 import { useDoubleClick } from '../hooks/use-double-click'
 import { useMuttering } from '../hooks/use-muttering'
 import { usePetBubbles } from '../hooks/use-pet-bubbles'
+import { resolveBubbleMotion } from '../utils/bubble'
 import { PetBubbleLayer } from './bubble-layer'
 import { CodexPet } from './codex-pet'
 import { DshPet } from './dsh-pet'
@@ -148,11 +149,20 @@ export function Pet(props: PetProps) {
       if (bubble.motion !== undefined)
         motionRequest(bubble.motion)
     },
+    // 原地更新时档位换了（加载态 → 完成态）必须重发一次，否则画面停在加载态的动作上
+    onUpdate: (bubble: PetBubble, previous: PetBubble) => {
+      const motion = resolveBubbleMotion(bubble, previous)
+      if (motion !== undefined)
+        motionRequest(motion)
+    },
     onClose: (bubble: PetBubble) => {
       if (bubble.restore)
         motionClear()
     },
   })
+
+  // 有气泡处于加载态时碎碎念整体禁用（别让后台碎碎念打断正在跑的会话）
+  const mutteringSuspended = bubbles.some(bubble => bubble.loading)
 
   // 气泡全部尺寸以宠物**实测宽度**等比缩放（`--dsh-pet-size`）：实测而不是按配置推算，
   // 这样宿主的 `size` / 配置 / CSS 覆盖最终都落在同一个基准上
@@ -185,6 +195,7 @@ export function Pet(props: PetProps) {
     image: plan.image,
     memes: dshConfig?.memes,
     whisperPool,
+    suspended: mutteringSuspended,
     onMuttering,
     // 碎碎念动画：dsh 取 `animations.events.whisper` 整池里的一段动画名（不属于 14 个动作，
     // 走渲染器的一次性插播通道）；池为空（Codex 图集 / 配置没写）时回落 `mutteringMotion`

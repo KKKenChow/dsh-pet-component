@@ -370,3 +370,64 @@ pnpm dev:playground                        # 手动验收：叠加 / 更新 / �
 * **本轮顺带回填**：上一轮上游评估结论写入 `docs/sync/2026-09-16.md`（`docs/sync/2026-09-11.md`
   保持空 stub），其中「`memes` / `whisperImageEnabled` 补进 `DshPetConfig`」随配图落地自动成立；
   **`source/dsh-pet` gitlink 是否从 `2136e5d` 推进到 `4c09729` 仍等裁决**。
+
+---
+
+## 11. 与 deepseek-harness-desktop 的观感对齐（复审 5 项）
+
+用户按实际观感提了 5 条，逐条对着 desktop 的 toast 源码改（HeroUI `components/toast/*`
++ `@heroui/styles/dist/components/toast.css` + `toast/constants.js`）：
+
+1. **字号 / 裁剪 / 圆角与 toast 一致**：标题与正文统一 `14px / 20px`（标题 `font-weight: 500`）；
+   正文 `line-clamp-2` 两行截断（对应 desktop 的 `Toast.Description className="line-clamp-2"`）
+   + 内容列 `overflow: hidden`；圆角 `min(32px, var(--radius-3xl, 1.5rem))` = 24px；内边距
+   `12px 16px`、图标与内容间距 6px。
+   **气泡不再按宠物宽度等比缩放** —— desktop 的桌宠气泡本来就是固定尺寸的 toast（它的窗口
+   靠 `PET_BUBBLE_MIN_WIDTH = 420` 撑开以保证可读），所以这里改用固定宽度
+   `min(460px, calc(100vw - 2rem))`（HeroUI `--toast-width` 默认 460），`--dsh-pet-size`
+   只再决定「贴在宠物的哪个高度」。
+2. **堆叠与 toast 一致**：逐值照搬 `toast.js` + `constants.js` —— 最新一条在最前（完整尺寸），
+   更旧的按 `index` 做 `scale(1 - 0.05·index)` 与 `12px·index` 的位移（方向为**背离宠物**），
+   `z-index = count - index`；非最前那条高度取最前那条 + `overflow: hidden`，所以只从背后露出
+   一条边。淡入与尾巴只由最前那条承担。
+3. **默认图标与 toast 一致**：逐值复制 HeroUI `InfoIcon` / `SuccessIcon` / `WarningIcon` /
+   `DangerIcon`（16×16 视口、`fill="currentColor"`、`evenodd`）；加载态用 HeroUI `Spinner` 的
+   两段圆弧（原实现走 linearGradient，这里用 `fillOpacity` 静态近似，16px 旋转下观感一致）；
+   语义色只染**标题与图标**（`--success-soft-foreground` 等，缺失时回落 `--success` / 硬编码值），
+   撤掉之前那个自画的色块圆圈。
+4. **原地更新为完成态时动画没换、气泡不消失**（两个真 bug，已修）：
+   - 动画：队列原先只在**创建**时回调，`motion` 换了不重发。新增 `onUpdate` 回调 +
+     `resolveBubbleMotion()`（用 `motionInputKey` 比较，避免宿主每次传新对象字面量都重播）。
+   - 气泡：`updateBubble` 原先「没显式给 `timeout` 就沿用旧时长」，于是 default（常驻）→
+     success 永远挂着。现在**语义色变化**会按新语义色的默认时长重算，队列在时长变化时重排计时；
+     「只换文字」仍然不重置计时。
+5. **加载态气泡期间碎碎念禁用**：`<Pet>` 用 `bubbles.some(b => b.loading)` 把 `suspended` 传给
+   `useMuttering`；控制器挂起期间 `tick` / `request` / `show` 全部 no-op，且**不消费「首拍基线」**
+   （加载态一结束，第一拍仍是 baseline）。`suspended` 走 ref 不进 `useMemo` 依赖，所以加载态
+   来去不会重建控制器、不会白等一个周期。
+
+测试补齐：`test/bubble-queue.test.ts`（`onUpdate` 回调、语义色换档的时长重算、`resolveBubbleMotion`
+的等价性比较）、`test/muttering.test.ts`（挂起期间三个入口全静默且首拍基线不被消费）。
+
+---
+
+## 12. 二轮观感修复（同日，复审 4 项）
+
+1. **加载态图标与 desktop 一致**：改用 HeroUI `Spinner` 的完整实现（`spinner/spinner.js` 的
+   `SpinnerPrimitive`）—— 两段圆弧 + 两个 linearGradient（id 由 `useId` 派生，避免同页多实例撞车）、
+   `size-4`（16px）+ 旋转。上一版用 `fillOpacity` 静态近似渐变，观感确实有差。
+2. **图标改为直接从 `@gravity-ui/icons` 取**：新增运行时依赖 `@gravity-ui/icons`（走 catalog，
+   实装 2.22.0）。`default` / `success` / `warning` / `danger` 分别是
+   `CircleInfo` / `CircleCheck` / `TriangleExclamation` / `CircleExclamation` ——
+   与 HeroUI toast 的默认图标同源，也是 desktop 全项目在用的那一批（`src/components/*.tsx`）；
+   不再手抄 SVG 路径。
+3. **去掉小尖角 + 层叠方向修正**：气泡不再画尾巴（desktop 的 toast 是纯圆角矩形）；层叠方向
+   改回 HeroUI 的语义（`toast.js`：`translateY = (isBottom ? -1 : 1) * index * gap`）——
+   头顶那摞**往下**叠、脚下那摞往上叠。上一版按「背离宠物」实现成了向上，方向反了。
+4. **整体尺寸按宠物缩到合身**：toast 的度量（14px 正文 / 12·16px 内边距 / 24px 圆角 / 6px 间距 /
+   460px 宽）是按 462px 画布设计的，固定照搬比宠物大一圈。现在统一走 `scaled(ratio, min, max)`
+   —— 以 `--dsh-pet-size`（宠物实测宽度）为基准等比缩放并夹在可读区间：正文与标题
+   `clamp(11px, 3.03%, 14px)`、内边距 `clamp(6px, 2.6%, 12px)` / `clamp(8px, 3.46%, 16px)`、
+   圆角 `min(24px, 5.2%)`、图标 `clamp(12px, 3.46%, 16px)`、气泡宽 `min(92%, 100vw - 2rem)`、
+   配图 `min(26%, 120px)`。层叠间距同样是 `clamp(6px, 2.6%, 12px)`，位移写成行内
+   `calc(clamp(...) * index)`，所以跟着宠物一起缩放。

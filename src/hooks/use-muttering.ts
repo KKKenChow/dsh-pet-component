@@ -45,6 +45,13 @@ export interface MutteringPorts {
 export interface MutteringControllerOptions extends MutteringPorts {
   /** 是否启用自动碎碎念（周期到点才通知宿主；`pet.muttering(text)` 不受它门控） */
   enabled: boolean
+  /**
+   * 当前是否被**挂起**（渲染层判定：只要有一条气泡处于加载态，碎碎念就整体禁用）。
+   *
+   * 传函数而不是布尔值：挂起只该影响「这一次触发」，不该重建控制器 —— 重建会把
+   * 「首拍基线」状态一起清掉，加载态一结束就白等一个周期。
+   */
+  isSuspended?: () => boolean
   prompt: string
   /** 周期（秒） */
   intervalSec: number
@@ -118,8 +125,11 @@ export function createMutteringController(options: MutteringControllerOptions): 
     }
   }
 
+  /** 挂起（有加载态气泡）时整体禁用：不触发、不展示，也不消费「首拍」状态 */
+  const suspended = (): boolean => disposed || options.isSuspended?.() === true
+
   const tick = (): void => {
-    if (disposed || !options.enabled)
+    if (suspended() || !options.enabled)
       return
     const reason: PetMutteringReason = started || options.immediate ? 'tick' : 'baseline'
     started = true
@@ -128,7 +138,7 @@ export function createMutteringController(options: MutteringControllerOptions): 
   }
 
   const request = (): void => {
-    if (disposed)
+    if (suspended())
       return
     started = true
     baselinePending = false
@@ -136,7 +146,7 @@ export function createMutteringController(options: MutteringControllerOptions): 
   }
 
   const show = (text: string, showOptions?: PetMutteringShowOptions): void => {
-    if (disposed)
+    if (suspended())
       return
     const value = String(text ?? '').trim()
     if (value === '')
@@ -170,7 +180,9 @@ export function createMutteringController(options: MutteringControllerOptions): 
   }
 }
 
-export interface UseMutteringOptions extends Omit<MutteringControllerOptions, 'random'> {
+export interface UseMutteringOptions extends Omit<MutteringControllerOptions, 'isSuspended' | 'random'> {
+  /** 当前是否挂起（有加载态气泡时为真）：挂起期间不触发、不展示 */
+  suspended?: boolean
   random?: () => number
 }
 
@@ -200,6 +212,7 @@ export function useMuttering(options: UseMutteringOptions): UseMutteringReturn {
     onPlay,
     onShow,
     random,
+    suspended,
   } = options
 
   // 渲染层回调与随机源走 ref：消费方常写内联箭头函数，直接进依赖会让控制器每次渲染重建
@@ -207,6 +220,9 @@ export function useMuttering(options: UseMutteringOptions): UseMutteringReturn {
   portsRef.current = { onMuttering, onPlay, onShow }
   const randomRef = useRef(random)
   randomRef.current = random
+  // 挂起同理走 ref（不进依赖）：加载态气泡来去不该重建控制器（重建会清掉首拍基线状态）
+  const suspendedRef = useRef(suspended)
+  suspendedRef.current = suspended
 
   const controller = useMemo(() => createMutteringController({
     enabled,
@@ -221,6 +237,7 @@ export function useMuttering(options: UseMutteringOptions): UseMutteringReturn {
     onMuttering: (text, event) => portsRef.current.onMuttering?.(text, event),
     onPlay: name => portsRef.current.onPlay(name),
     onShow: (text, showOptions) => portsRef.current.onShow(text, showOptions),
+    isSuspended: () => suspendedRef.current === true,
     random: () => (randomRef.current ?? Math.random)(),
   }), [duration, enabled, image, immediate, intervalSec, memes, petId, prompt, whisperPool])
 

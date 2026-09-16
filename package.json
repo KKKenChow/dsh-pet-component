@@ -50,6 +50,7 @@
     "react": "^19.0.0"
   },
   "dependencies": {
+    "@gravity-ui/icons": "catalog:",
     "@reause/core": "catalog:",
     "@reause/integrations": "catalog:",
     "css-render": "catalog:",

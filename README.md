@@ -156,7 +156,7 @@ export function App() {
 
 ### 气泡与碎碎念
 
-**气泡**（`pet.bubble`）是纯展示层：宿主管内容，组件管叠加、原地更新、定时收起与捆绑运行动画。所有尺寸以宠物实测宽度（`--dsh-pet-size`）等比缩放，观感与 dsh-pet 的白气泡一致（白色半透明底 + 指向宠物的小尾巴）。
+**气泡**（`pet.bubble`）是纯展示层：宿主管内容，组件管叠加、原地更新、定时收起与捆绑运行动画。观感对齐桌面端（`deepseek-harness-desktop`）的 toast：标题与正文 14px（标题 medium）、正文两行截断、24px 圆角、语义色只染标题与图标（图标直接取自 `@gravity-ui/icons` —— `CircleInfo` / `CircleCheck` / `TriangleExclamation` / `CircleExclamation`，加载态是 HeroUI 的 `Spinner`）。整组度量按宠物实测宽度（`--dsh-pet-size`）等比缩到与宠物合身，多条时按 toast 的层叠规则叠放（缩放系数 0.05、间距 12px，越旧越靠后）。
 
 ```ts
 const key = pet.bubble({ id: 's1', title: '会话标题', description: '正在分析代码…', loading: true, motion: 'thinking' })

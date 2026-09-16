@@ -144,14 +144,14 @@ describe('createMutteringController', () => {
   })
 
   it('从 whisper 池抽动画并避开上一段；池为空时回调 undefined（调用方回落 waving）', () => {
-    const { controller, played } = setup({ whisperPool: ['擦桌', '发呆'] })
+    // 注入固定随机源：抽中池里第一个，第二次就会避开它
+    const { controller, played } = setup({ whisperPool: ['擦桌', '发呆'], random: () => 0 })
     controller.request()
     controller.show('a')
     controller.show('b')
     expect(played).toEqual(['擦桌', '发呆'])
-    expect(new Set(played).size).toBe(2)
 
-    const empty = setup({ whisperPool: [] })
+    const empty = setup({ whisperPool: [], random: () => 0 })
     empty.controller.request()
     empty.controller.show('a')
     expect(empty.played).toEqual([undefined])
@@ -200,6 +200,30 @@ describe('createMutteringController', () => {
     expect(() => controller.tick()).not.toThrow()
     expect(warn).toHaveBeenCalledTimes(2)
     warn.mockRestore()
+  })
+
+  it('挂起（有加载态气泡）时整体禁用，且不消费「首拍基线」', () => {
+    let suspended = false
+    const { controller, asked, played, shown } = setup({ isSuspended: () => suspended })
+
+    suspended = true
+    controller.tick()
+    controller.request()
+    controller.show('挂起期间的一句话')
+    expect(asked).toHaveLength(0)
+    expect(played).toHaveLength(0)
+    expect(shown).toHaveLength(0)
+
+    // 恢复后第一拍仍然是 baseline（挂起没有把它消费掉）
+    suspended = false
+    controller.tick()
+    expect(asked[0]?.event.reason).toBe('baseline')
+    controller.show('基线那句被丢弃')
+    expect(shown).toHaveLength(0)
+
+    controller.tick()
+    controller.show('这一句能展示')
+    expect(shown).toHaveLength(1)
   })
 
   it('dispose 之后全部 no-op', () => {

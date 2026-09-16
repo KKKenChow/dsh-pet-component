@@ -4,6 +4,7 @@ import {
   BUBBLE_DEFAULT_TIMEOUT,
   createBubble,
   MAX_VISIBLE_BUBBLES,
+  resolveBubbleMotion,
   resolveBubbleTimeout,
   updateBubble,
 } from '../src/utils/bubble'
@@ -204,5 +205,61 @@ describe('createBubbleQueue', () => {
     queue.show({ id: 'a', description: 'a2' })
     queue.close('a')
     expect(snapshots).toEqual([['a'], ['a'], []])
+  })
+
+  it('onUpdate 拿到更新前后的两条（渲染层据此判断要不要重发捆绑动画）', () => {
+    const updates: [string, string][] = []
+    const queue = createBubbleQueue({
+      onUpdate: (bubble, previous) => updates.push([String(previous.description), String(bubble.description)]),
+    })
+    queue.show({ id: 'a', description: 'x' })
+    queue.show({ id: 'a', description: 'y' })
+    // 内容没变的原地更新也会回调（要不要重发动画由渲染层的 resolveBubbleMotion 决定）
+    queue.show({ id: 'a', description: 'y' })
+    expect(updates).toEqual([['x', 'y'], ['y', 'y']])
+  })
+
+  it('加载态原地更新为完成态：按新语义色的默认时长自动收起', () => {
+    const queue = createBubbleQueue()
+    // 加载态：default 语义色 = 常驻
+    queue.show({ id: 's1', description: '正在处理', loading: true, motion: 'thinking' })
+    expect(queue.list[0]?.duration).toBe(0)
+    vi.advanceTimersByTime(10_000)
+    expect(queue.list).toHaveLength(1)
+    // 原地更新为完成：success 默认 3000ms，到点必须自己消失
+    queue.show({ id: 's1', description: '已完成', loading: false, variant: 'success', motion: 'success' })
+    expect(queue.list[0]?.duration).toBe(3000)
+    vi.advanceTimersByTime(2999)
+    expect(queue.list).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(queue.list).toHaveLength(0)
+  })
+})
+
+describe('resolveBubbleMotion', () => {
+  it('档位变了才重发；没给 motion 或用等价的 motion 都不重发', () => {
+    const thinking = createBubble({ description: 'x', motion: 'thinking' }, 'a', 1)
+    // 更新没带 motion → 不重发
+    expect(resolveBubbleMotion(createBubble({ description: 'y' }, 'a', 1), thinking)).toBeUndefined()
+    // 等价的 motion（对象字面量 vs 字符串）→ 不重发，用 motionInputKey 比较而不是引用比较
+    expect(resolveBubbleMotion(updateBubble(thinking, { motion: { type: 'thinking' } }), thinking)).toBeUndefined()
+    // 换档位 → 重发新的那一个
+    const done = updateBubble(thinking, { loading: false, variant: 'success', motion: 'success' })
+    expect(resolveBubbleMotion(done, thinking)).toBe('success')
+    // 之前没有 motion、现在有了 → 重发
+    expect(resolveBubbleMotion(done, createBubble({ description: 'y' }, 'a', 1))).toBe('success')
+  })
+})
+
+describe('updateBubble 的时长重算规则', () => {
+  it('语义色换了就按新语义色的默认时长重算', () => {
+    const loading = createBubble({ description: 'x', loading: true }, 'a', 1)
+    expect(loading.duration).toBe(0)
+    expect(updateBubble(loading, { description: 'y', variant: 'success' }).duration).toBe(3000)
+    expect(updateBubble(loading, { description: 'y', variant: 'danger' }).duration).toBe(4000)
+    expect(updateBubble(loading, { description: 'y', variant: 'warning' }).duration).toBe(2500)
+    // 语义色没变又没给 timeout → 时长不动
+    const success = createBubble({ description: 'x', variant: 'success' }, 'a', 1)
+    expect(updateBubble(success, { description: 'y' }).duration).toBe(3000)
   })
 })

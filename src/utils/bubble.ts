@@ -1,4 +1,7 @@
 import type { PetBubble, PetBubbleOptions, PetBubbleVariant } from '../types/bubble'
+import type { MotionInput } from '../types/motion'
+import { isLoopingMotion } from '../config'
+import { normalizeMotionInput } from '../types/motion'
 
 /**
  * 气泡的纯逻辑层（与队列容器 `createBubbleQueue` 分开：这里没有定时器，可单测）。
@@ -73,8 +76,45 @@ export function updateBubble(previous: PetBubble, options: PetBubbleOptions): Pe
     motion: options.motion ?? previous.motion,
     restore: options.restore ?? previous.restore,
     placement: options.placement ?? previous.placement,
-    duration: options.timeout === undefined
-      ? previous.duration
-      : resolveBubbleTimeout(variant, options.timeout),
+    duration: resolveUpdatedDuration(previous, options, variant),
   }
+}
+
+/**
+ * 原地更新时的时长规则：
+ *
+ * 1. 显式给 `timeout` → 按它重算（`0` = 改回常驻）；
+ * 2. 没给但**语义色变了** → 按新语义色的默认时长重算 —— 否则「加载态（`default`，常驻）
+ *    原地更新为完成（`success`）」会永远挂在画面上不消失；
+ * 3. 两者都没有 → 保持原时长，所以「原地换文字」不会重置自动收起。
+ */
+function resolveUpdatedDuration(previous: PetBubble, options: PetBubbleOptions, variant: PetBubbleVariant): number {
+  if (options.timeout !== undefined)
+    return resolveBubbleTimeout(variant, options.timeout)
+  if (variant !== previous.variant)
+    return resolveBubbleTimeout(variant)
+  return previous.duration
+}
+
+/**
+ * 原地更新后需要**重新下发**的捆绑动画（不需要则返回 `undefined`）。
+ *
+ * 比较的是**语义状态**而不是入参形状：`'thinking'` 与 `{ type: 'thinking' }` 等价
+ * （用 `normalizeMotionInput` + `isLoopingMotion` 归一），`replay` 不参与比较（它是
+ * 「强制重播」的开关，不是状态）。这样宿主每次传新对象字面量不会重播动画，而
+ * `loading: true → false` 这种真正换了档位的更新一定会重发 —— 否则画面会停在加载态的动作上。
+ */
+export function resolveBubbleMotion(next: PetBubble, previous: PetBubble): MotionInput | undefined {
+  if (next.motion === undefined)
+    return undefined
+  if (previous.motion !== undefined && motionStateKey(next.motion) === motionStateKey(previous.motion))
+    return undefined
+  return next.motion
+}
+
+/** 动作的语义状态指纹（动作名 + 归一后的循环语义；忽略 `replay`）。 */
+function motionStateKey(input: MotionInput): string {
+  const type = typeof input === 'string' ? input : input.type
+  const normalized = normalizeMotionInput(input, isLoopingMotion(type))
+  return `${normalized.type}:${normalized.loop ? '1' : '0'}`
 }

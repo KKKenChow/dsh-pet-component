@@ -279,8 +279,10 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
       hideTimers.delete(id)
       if (!entries.has(id))
         return
-      // 收起后不再被「同一档位」重建（对齐参考实现的 dismissed）
-      dismissed.add(id)
+      // 终态档收起后不再被「同一档位」重建（对齐参考实现：dismissed 只由终态档的 scheduleHide 打上）；
+      // 显式 `timeout` 的通知气泡（非终态）收起后，宿主再推就该再出现
+      if (isTerminalMotion(entry.motion))
+        dismissed.add(id)
       closeEntry(id)
       armPrune(id)
     }, entry.duration)
@@ -331,8 +333,10 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
 
     const entry = entries.get(id)
     if (entry === undefined) {
-      // 「收起过 / 同档位」不再重建（对齐 `dismissed.has(id) || previous === current`）
-      if (seen && (dismissed.has(id) || previous === key))
+      // 终态档自动收起过、且**档位没变** → 不再重建（对齐参考实现 `dismissed.has(id) || previous === current`
+      // 里真正起作用的那一半）：同一档位重复上报不会把刚收起的气泡又弹回来；档位变了、
+      // 或显式 `timeout` 的通知气泡（非终态、不登记 dismissed）再推，都照常出现。
+      if (seen && dismissed.has(id) && previous === key)
         return
       const created = createBubble(session, id, ++createdSeq)
       entries.set(id, created)

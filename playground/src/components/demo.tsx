@@ -379,27 +379,19 @@ export function PetDemo() {
             <p className="motion-bar__title">
               气泡 · pet.bubble(...)（同 id 再次下发 = 原地更新；同时最多 3 条，超出关最旧）
             </p>
-            <div className="actions actions--wrap">
+            <div className="actions actions--wrap" style={{ marginBottom: '0.5em' }}>
               <button
                 type="button"
                 className="btn"
                 title="pet.bubble({ id, title, description, loading: true, motion: 'thinking' })"
                 onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '正在分析代码…', loading: true, motion: 'thinking' })}
               >
-                气泡：加载态
+                加载
               </button>
               <button
                 type="button"
                 className="btn"
-                title="同一个 id 再下发：原地更新，不重新淡入、不重置收起计时"
-                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '分析完成：改了 3 个文件', loading: false, variant: 'success', motion: 'success' })}
-              >
-                原地更新为完成
-              </button>
-              <button
-                type="button"
-                className="btn"
-                title="加载态原地更新为警告：语义色换档（按新语义色的默认时长重算，动画跟着换档）"
+                title="原地更新为警告档：语义色 warning + motion 'waiting'（等待档常驻，等下次更新）"
                 onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '余额只剩 12%', loading: false, variant: 'warning', motion: 'waiting' })}
               >
                 更新为警告
@@ -407,26 +399,45 @@ export function PetDemo() {
               <button
                 type="button"
                 className="btn"
-                title="保持加载态，只换文字（不重新淡入、不重置收起计时）"
-                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '正在分析代码…（已读 3 个文件）', loading: true, motion: 'thinking' })}
+                title="只换文字：不传 variant / loading / motion，档位与收起计时都不动"
+                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '只换了这一句文字，档位没动', variant: 'default' })}
               >
-                加载态文字更新
+                更新文字
               </button>
               <button
                 type="button"
                 className="btn"
-                title="语义色 + 默认图标（@gravity-ui/icons 的 TriangleExclamation）+ 2.5s 自动收起"
-                onClick={() => runBubble({ id: 'warn', title: '需要注意', description: '余额只剩 12%', variant: 'warning', timeout: 2500 })}
+                title="原地更新为完成：气泡 3s 收起，动作留 10s 让终态动画播完（TERMINAL_PULSE_TTL）"
+                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '分析完成：改了 3 个文件', loading: false, variant: 'success', motion: 'success' })}
+              >
+                更新为完成
+              </button>
+              <button
+                type="button"
+                className="btn"
+                title="原地更新为失败：气泡留 4s 读，动作 1.8s 就回落（FAILED_PULSE_TTL）"
+                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '写入失败：权限不足', loading: false, variant: 'danger', motion: 'failed' })}
+              >
+                更新为失败
+              </button>
+            </div>
+
+            <div className="actions actions--wrap">
+              <button
+                type="button"
+                className="btn"
+                title="独立 id 的通知气泡：语义色 + 默认图标（TriangleExclamation）+ 等待动画 + 2.5s 自动收起；再点一次仍会出现"
+                onClick={() => runBubble({ id: 'warn', title: '需要注意', description: '余额只剩 12%', variant: 'warning', motion: 'waiting', timeout: 2500 })}
               >
                 警告气泡
               </button>
               <button
                 type="button"
                 className="btn"
-                title="连发三条：演示叠加与上限淘汰；动作归最新那条，收起时交还给上一条带动作的气泡"
+                title="连发三条：演示叠加与上限淘汰；上限只挤掉可见层，被挤掉那条的档位仍在聚合里"
                 onClick={() => {
                   runBubble({ id: 'demo-1', title: '会话 A', description: '正在检索', loading: true, motion: 'thinking', timeout: 8000 })
-                  runBubble({ id: 'demo-2', title: '会话 B', description: '等待确认', variant: 'warning' })
+                  runBubble({ id: 'demo-2', title: '会话 B', description: '等待确认', variant: 'warning', motion: 'waiting' })
                   runBubble({ id: 'demo-3', title: '会话 C', description: '已完成', variant: 'success', motion: 'success' })
                 }}
               >
@@ -441,7 +452,7 @@ export function PetDemo() {
                   setLastCommand('pet.bubble.clear()')
                 }}
               >
-                pet.bubble.clear()
+                清除状态
               </button>
             </div>
           </div>

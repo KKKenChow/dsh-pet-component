@@ -195,6 +195,29 @@ export function Pet(props: PetProps) {
   /** 按动画名的一次性插播（dsh 渲染器专用通道，见 `DshPetProps.adHocAnimation`） */
   const [adHocAnimation, setAdHocAnimation] = useState<{ name: string, seq: number } | null>(null)
   const adHocSeqRef = useRef(0)
+  /**
+   * 正在插播的碎碎念动画名（`null` = 没在插播）。
+   *
+   * 碎碎念气泡跟着它走：渲染器回报的动画不再是这一条（播完回落 / 被别的动画接管）就收起气泡 ——
+   * 也就是「气泡随动画消失」；`mutteringDuration`（缺省 10s）因此退化成宿主可调的硬上限。
+   */
+  const whisperAnimationRef = useRef<string | null>(null)
+
+  /**
+   * 渲染器回报的动画变化：碎碎念插播结束后收气泡，宿主自己的 `onAnimationChange` 原样透传。
+   *
+   * 用 `useCallback` 钉住身份：渲染器把这个回调放进了 effect 依赖，每次渲染换新函数会让
+   * 它每帧回报一次（宿主若在回调里 setState 就会自激）。
+   */
+  const hostAnimationChange = common.onAnimationChange
+  const handleAnimationChange = useCallback((info: Parameters<NonNullable<PetProps['onAnimationChange']>>[0]) => {
+    const whisper = whisperAnimationRef.current
+    if (whisper !== null && info?.name !== whisper) {
+      whisperAnimationRef.current = null
+      bubbleHandleRef.current?.close(MUTTERING_BUBBLE_ID)
+    }
+    hostAnimationChange?.(info)
+  }, [hostAnimationChange])
 
   const { handle: mutteringHandle } = useMuttering({
     enabled: plan.enabled,
@@ -212,12 +235,14 @@ export function Pet(props: PetProps) {
     // 走渲染器的一次性插播通道）；池为空（Codex 图集 / 配置没写）时回落 `mutteringMotion`
     onPlay: (name) => {
       if (name === undefined) {
+        whisperAnimationRef.current = null
         const fallback = mutteringMotion ?? 'waving'
         motionRequest(typeof fallback === 'string'
           ? { type: fallback, replay: true }
           : { ...fallback, replay: true })
         return
       }
+      whisperAnimationRef.current = name
       adHocSeqRef.current += 1
       setAdHocAnimation({ name, seq: adHocSeqRef.current })
     },
@@ -279,6 +304,7 @@ export function Pet(props: PetProps) {
           {...common}
           motion={effectiveMotion}
           ref={motionRef}
+          onAnimationChange={handleAnimationChange}
           onHitboxPointerDown={onHitboxPointerDown}
           config={resolved as CodexPetConfig}
           uri={typeof uri === 'string' ? uri : uri?.default}
@@ -297,6 +323,7 @@ export function Pet(props: PetProps) {
         motion={effectiveMotion}
         ref={motionRef}
         adHocAnimation={adHocAnimation}
+        onAnimationChange={handleAnimationChange}
         onHitboxPointerDown={onHitboxPointerDown}
         config={resolved as DshPetConfig}
         uri={typeof uri === 'string' ? { default: uri } : (uri ?? { default: '' })}

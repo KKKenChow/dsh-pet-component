@@ -197,9 +197,11 @@ pet.bubble.clear()
 ```
 
 * **首拍只记基线**：挂载后第一次到点以 `reason: 'baseline'` 通知宿主，且这期间推回的文本**不会展示**（对应 dsh-pet 的 `hasBaseline`，避免启动/刷新时重放旧句子）；`mutteringImmediate` 可关掉这个行为。
-* **宿主推回才展示**：组件不持有 Promise。`pet.muttering(text, { image?, duration? })` 从 `animations.events.whisper` 整池随机抽一段动画播放（避开上一段），并弹一条 10s 气泡；这句话走 `title`（说话语气、不占图标位），配图走 `image`；池为空时回落 `mutteringMotion`（缺省 `waving` —— Codex 图集走这条）。
+* **宿主推回才展示**：组件不持有 Promise。`pet.muttering(text, { image?, duration? })` 从 `animations.events.whisper` 整池随机抽一段动画播放（避开上一段），并弹一条碎碎念气泡（**随那段插播动画结束而收起**，`mutteringDuration` 是硬上限）；这句话走 `title`（说话语气、不占图标位），配图走 `image`；池为空时回落 `mutteringMotion`（缺省 `waving` —— Codex 图集走这条）。
 * **状态登记处与可见层是两层**（移植自参考实现的 `sessions` / toast 分层）：`pet.bubble({ id, motion })` 登记的档位留在状态机里，可见气泡每处最多 3 条 —— 被上限挤下去、或到点收起，都**只影响可见层**，动作照旧由登记的档位聚合。所以「三条叠加挤掉常驻的加载态」之后，加载动画仍然在（三条的终态脉冲过期后也是）。
 * **终态档有独立的保持窗口**：`success` / `error` 的气泡 3s 收起，动作还留 10s（`failed` 1.8s）让动画完整播完 —— 上游注释里记的正是「成功动画没播完就换回待机」这个报告。
+* **碎碎念气泡跟着它的插播动画走**：`events.whisper` 那段插播播完（渲染器回报的动画不再是它）就收起气泡，`mutteringDuration`（缺省 10s）只是宿主可调的硬上限。
+* **收起过的不再被同一档位重建**：终态档（`success` / `failed` / `error`）自动收起后**档位没变**就不重弹（对齐上游 `dismissed`：状态重复上报不该把刚收起的气泡又弹回来）；档位换了、或显式 `timeout` 的通知气泡收起后再推，都会照常出现。
 * **只有终态档会自己收起**：`success` 3000 / `failed`·`error` 4000 / `review` 2500，其余档位（工作档、等待档）常驻等状态变化；`loading: true` 一律回到 Info 档（对齐 `toastContent`：`isLoading` 只出现在 `default` 档位）。聚合下发还带 100ms 合并窗口，多会话交错时不会把动画反复切回。
 * **状态压过闲聊**：出现非碎碎念气泡时碎碎念那条立即收起；插播（空闲风味动作 / 碎碎念动画）只在**纯待机**时播，状态动作一到就接手，不必等插播播完。加载态只挡**自动**碎碎念，手动 `pet.muttering(...)` / `pet.muttering.request()` 随时可用（说话优先：会先清掉状态气泡）。
 * **配图**：开启后组件从 `config.memes` 随机抽 1 张（不让模型选），把 `{ name, desc }` 放进事件载荷供宿主拼提示词，图片 URL 由宿主给。

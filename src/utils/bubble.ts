@@ -47,7 +47,7 @@ export function createBubble(options: PetBubbleOptions, id: string, created: num
     loading: options.loading === true,
     variant,
     motion: options.motion,
-    restore: options.restore !== false,
+    restore: options.restore === true,
     placement: options.placement ?? 'top',
     kind: options.kind ?? 'bubble',
     duration: resolveBubbleTimeout(variant, options.timeout),
@@ -117,4 +117,23 @@ function motionStateKey(input: MotionInput): string {
   const type = typeof input === 'string' ? input : input.type
   const normalized = normalizeMotionInput(input, isLoopingMotion(type))
   return `${normalized.type}:${normalized.loop ? '1' : '0'}`
+}
+
+/**
+ * 从队列里挑出**最新的那条带捆绑动画的气泡** —— 某条气泡收起时把动作交还给谁。
+ *
+ * 队列是「旧 → 新」的顺序，而最新的一条在层叠里最靠前（`--front`），所以它才是动作的主人；
+ * 从后往前扫第一个命中即可（`excludeId` 用来跳过正在收起的那条）。
+ */
+export function newestMotionBubble(
+  bubbles: readonly PetBubble[],
+  excludeId?: string,
+): PetBubble | undefined {
+  for (let index = bubbles.length - 1; index >= 0; index -= 1) {
+    const bubble = bubbles[index]
+    if (bubble === undefined || bubble.id === excludeId || bubble.motion === undefined)
+      continue
+    return bubble
+  }
+  return undefined
 }

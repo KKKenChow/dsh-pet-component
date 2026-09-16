@@ -400,19 +400,35 @@ export function PetDemo() {
               <button
                 type="button"
                 className="btn"
-                title="语义色 + 图标 + 2.5s 自动收起"
-                onClick={() => runBubble({ id: 'warn', title: '需要注意', description: '余额只剩 12%', icon: '!', variant: 'warning', timeout: 2500 })}
+                title="加载态原地更新为警告：语义色换档（按新语义色的默认时长重算，动画跟着换档）"
+                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '余额只剩 12%', loading: false, variant: 'warning', motion: 'waiting' })}
+              >
+                更新为警告
+              </button>
+              <button
+                type="button"
+                className="btn"
+                title="保持加载态，只换文字（不重新淡入、不重置收起计时）"
+                onClick={() => runBubble({ id: BUBBLE_DEMO_ID, title: BUBBLE_TITLE, description: '正在分析代码…（已读 3 个文件）', loading: true, motion: 'thinking' })}
+              >
+                加载态文字更新
+              </button>
+              <button
+                type="button"
+                className="btn"
+                title="语义色 + 默认图标（@gravity-ui/icons 的 TriangleExclamation）+ 2.5s 自动收起"
+                onClick={() => runBubble({ id: 'warn', title: '需要注意', description: '余额只剩 12%', variant: 'warning', timeout: 2500 })}
               >
                 警告气泡
               </button>
               <button
                 type="button"
                 className="btn"
-                title="连发三条：演示叠加与上限淘汰"
+                title="连发三条：演示叠加与上限淘汰；动作归最新那条，收起时交还给上一条带动作的气泡"
                 onClick={() => {
-                  runBubble({ id: 'demo-1', title: '会话 A', description: '正在检索', loading: true, motion: 'thinking' })
-                  runBubble({ id: 'demo-2', title: '会话 B', description: '等待确认', variant: 'warning', icon: '!' })
-                  runBubble({ id: 'demo-3', title: '会话 C', description: '已完成', variant: 'success', icon: '✓', motion: 'success' })
+                  runBubble({ id: 'demo-1', title: '会话 A', description: '正在检索', loading: true, motion: 'thinking', timeout: 8000 })
+                  runBubble({ id: 'demo-2', title: '会话 B', description: '等待确认', variant: 'warning' })
+                  runBubble({ id: 'demo-3', title: '会话 C', description: '已完成', variant: 'success', motion: 'success' })
                 }}
               >
                 三条叠加

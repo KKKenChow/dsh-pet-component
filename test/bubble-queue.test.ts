@@ -4,6 +4,7 @@ import {
   BUBBLE_DEFAULT_TIMEOUT,
   createBubble,
   MAX_VISIBLE_BUBBLES,
+  newestMotionBubble,
   resolveBubbleMotion,
   resolveBubbleTimeout,
   updateBubble,
@@ -35,13 +36,13 @@ describe('resolveBubbleTimeout', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('createBubble / updateBubble', () => {
-  it('补齐默认值：loading 假、restore 真、placement top、kind bubble', () => {
+  it('补齐默认值：loading 假、restore 假（不动动作）、placement top、kind bubble', () => {
     expect(createBubble({ description: '你好' }, 'a', 1)).toMatchObject({
       id: 'a',
       description: '你好',
       created: 1,
       loading: false,
-      restore: true,
+      restore: false,
       placement: 'top',
       kind: 'bubble',
       variant: 'default',
@@ -261,5 +262,20 @@ describe('updateBubble 的时长重算规则', () => {
     // 语义色没变又没给 timeout → 时长不动
     const success = createBubble({ description: 'x', variant: 'success' }, 'a', 1)
     expect(updateBubble(success, { description: 'y' }).duration).toBe(3000)
+  })
+})
+
+describe('newestMotionBubble', () => {
+  it('交还动作时挑最新的那条带 motion 的，跳过正在收起的那条', () => {
+    const first = createBubble({ description: 'a', motion: 'thinking' }, 'a', 1)
+    const middle = createBubble({ description: 'b' }, 'b', 2)
+    const last = createBubble({ description: 'c', motion: 'success' }, 'c', 3)
+
+    expect(newestMotionBubble([first, middle, last])?.id).toBe('c')
+    // 正在收起的 last 被跳过 → 交还给 first
+    expect(newestMotionBubble([first, middle, last], 'c')?.id).toBe('a')
+    // 没有别的气泡带 motion → undefined（调用方因此不动动作）
+    expect(newestMotionBubble([first, middle], 'a')).toBeUndefined()
+    expect(newestMotionBubble([], 'a')).toBeUndefined()
   })
 })

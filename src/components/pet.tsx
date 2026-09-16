@@ -8,7 +8,7 @@ import { useControllablePet } from '../hooks/use-controllable-pet'
 import { useDoubleClick } from '../hooks/use-double-click'
 import { useMuttering } from '../hooks/use-muttering'
 import { usePetBubbles } from '../hooks/use-pet-bubbles'
-import { resolveBubbleMotion } from '../utils/bubble'
+import { newestMotionBubble, resolveBubbleMotion } from '../utils/bubble'
 import { PetBubbleLayer } from './bubble-layer'
 import { CodexPet } from './codex-pet'
 import { DshPet } from './dsh-pet'
@@ -142,24 +142,47 @@ export function Pet(props: PetProps) {
 
   /* ---------------------------------- 气泡 --------------------------------- */
 
+  // 队列的实时快照：`onClose` 里要用它找「还有谁带着动作」
+  const bubblesRef = useRef<readonly PetBubble[]>([])
+  // 当前动作的下发者（气泡 id）。只有它的主人收起时才有资格交还动作 —— 否则关掉一条
+  // 没带动画的气泡会把正在播的动画打断（成功动画播到一半被掐断就是这个原因）
+  const motionOwnerRef = useRef<string | null>(null)
+
   const { bubbles, handle: bubbleHandle } = usePetBubbles({
-    // 捆绑运行动画：气泡出现即下发；收起时按 `restore` 回落 —— 宿主聚合出的档位
-    // （会话状态 → Motion）在这里变成真实动作，组件不做优先级判定
+    // 捆绑运行动画：气泡**创建**时下发一次（宿主聚合出的档位在这里变成真实动作）
     onShow: (bubble: PetBubble) => {
-      if (bubble.motion !== undefined)
-        motionRequest(bubble.motion)
+      if (bubble.motion === undefined)
+        return
+      motionOwnerRef.current = bubble.id
+      motionRequest(bubble.motion)
     },
     // 原地更新时档位换了（加载态 → 完成态）必须重发一次，否则画面停在加载态的动作上
     onUpdate: (bubble: PetBubble, previous: PetBubble) => {
       const motion = resolveBubbleMotion(bubble, previous)
-      if (motion !== undefined)
-        motionRequest(motion)
+      if (motion === undefined)
+        return
+      motionOwnerRef.current = bubble.id
+      motionRequest(motion)
     },
+    // 收起时**交还**而不是一律 clear：先看队列里还有没有别的气泡带着动作，交还给最新的那条；
+    // 都没了才看 `restore`（缺省 false = 不动动作，让当前动画自然播完）
     onClose: (bubble: PetBubble) => {
+      if (motionOwnerRef.current !== bubble.id)
+        return
+      motionOwnerRef.current = null
+      const next = newestMotionBubble(bubblesRef.current, bubble.id)
+      if (next?.motion !== undefined) {
+        motionOwnerRef.current = next.id
+        motionRequest(next.motion)
+        return
+      }
       if (bubble.restore)
         motionClear()
     },
   })
+
+  // 渲染后再同步快照（`onClose` 触发时 state 里还包含正在收起的那条，`excludeId` 会跳过它）
+  bubblesRef.current = bubbles
 
   // 有气泡处于加载态时碎碎念整体禁用（别让后台碎碎念打断正在跑的会话）
   const mutteringSuspended = bubbles.some(bubble => bubble.loading)
@@ -214,13 +237,11 @@ export function Pet(props: PetProps) {
       bubbleHandle({
         id: MUTTERING_BUBBLE_ID,
         kind: 'muttering',
-        description: text,
+        // 碎碎念是「说话」：文字走 title（`--muttering` 只是让宽度贴文字），且不占图标位
+        title: text,
         image: options.image,
         timeout: options.duration,
         placement: 'top',
-        // 碎碎念动画由渲染器的插播通道播放、播完自动回落到宿主的状态，
-        // 所以气泡收起时**不能** clear 掉宿主的动作
-        restore: false,
       })
     },
   })

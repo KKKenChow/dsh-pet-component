@@ -39,8 +39,11 @@ const BUBBLE_ICONS: Record<PetBubbleVariant, typeof CircleInfo> = {
   danger: CircleExclamation,
 }
 
-/** 图标槽：显式 `icon` > 加载圆环 > 语义色默认图标（`@gravity-ui/icons`）。 */
+/** 图标槽：碎碎念不占图标位；其余为 显式 `icon` > 加载圆环 > 语义色默认图标。 */
 function BubbleIndicator({ bubble }: { bubble: PetBubble }) {
+  // 碎碎念是「说话」而不是状态：只有正文，没有图标（对齐 dsh-pet 的白气泡）
+  if (bubble.kind === 'muttering')
+    return null
   if (bubble.icon != null)
     return <span className="dsh-pet__bubble-indicator">{bubble.icon}</span>
   if (bubble.loading)

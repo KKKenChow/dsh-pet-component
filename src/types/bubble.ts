@@ -52,7 +52,16 @@ export interface PetBubbleOptions {
    * 组件不做聚合判定。
    */
   motion?: MotionInput
-  /** 收起时是否 `pet.clear()` 回落到 `motion` prop，缺省 `true` */
+  /**
+   * 收起时是否 `pet.clear()` 回落 `motion` prop，**缺省 `false`**（不动动作）。
+   *
+   * 缺省不动动作是照抄 desktop 的语义：气泡与终结动作的生命周期**解耦**
+   * （成功 toast 3s 消失，终结动作还会多留 `TERMINAL_PULSE_TTL = 10s`），
+   * 所以气泡收起不会掐断正在播的动画。
+   *
+   * 收起时的完整规则：当前动作若不是本气泡下发的 → 什么都不做；是本气泡下发的 → 先交还给
+   * 队列里**最新的那条带 `motion` 的气泡**；没有别的气泡接手时，`true` 才会真的 `clear()`。
+   */
   restore?: boolean
   /**
    * 自动收起时长 ms；`0` = 常驻。

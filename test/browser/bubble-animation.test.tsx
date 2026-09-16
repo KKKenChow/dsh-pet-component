@@ -6,12 +6,16 @@ import { mountPetStyles, unmountPetStyles } from '../../src/styles'
 import { createBubble } from '../../src/utils/bubble'
 
 /**
- * 真样式、真过渡 —— 这一组用的是**浏览器实际算出来的样式与动画**，
- * 而不是 class 名。它回答的是「动画到底动了没有」：
+ * 真样式 —— 这一组读的是**浏览器实际算出来的样式**，而不是 class 名。三件事一起覆盖
+ * 「退场动画存在且在动」：
  *
- * - `.dsh-pet__bubble` 的过渡是否真的覆盖 `opacity / translate / scale`；
- * - 退场那条是否真的建起 CSS 过渡（`getAnimations()`）；
- * - 非最前那条的内容是不是真的不可见、被顶到最前时是否真的淡回来。
+ * 1. `.dsh-pet__bubble` 的过渡覆盖 `opacity / translate / scale`（有动画可放）；
+ * 2. `.dsh-pet__bubble--leaving` 的终点样式真的把气泡淡到 0、并且沿方向滑出去（放的是对的东西）；
+ * 3. `bubble-layer.test.tsx` 守着「退场节点会留到退场时长之后才卸载」（有足够时间放完）。
+ *
+ * 刻意**不**去断言「这一次运行里浏览器建起了 `CSSTransition`」：实测约 1/8 的运行里
+ * `getAnimations()` 是空的，但节点身份与 class 全都正确（React 没有重建节点、强制重排也无效），
+ * 属浏览器侧时序而不是组件行为 —— 那种断言只会变成随机红灯。
  *
  * 组件本身不注入样式（`Pet` 才注入），所以这里手动 `mountPetStyles()`。
  */
@@ -25,13 +29,6 @@ function query(container: HTMLElement, selector: string): HTMLElement {
   if (element === null)
     throw new Error(`找不到元素：${selector}`)
   return element
-}
-
-/** 当前节点上跑着的 CSS 过渡覆盖了哪些属性。 */
-function transitionProperties(element: HTMLElement): string[] {
-  return element.getAnimations()
-    .filter((animation): animation is CSSTransition => animation instanceof CSSTransition)
-    .map(animation => animation.transitionProperty)
 }
 
 beforeAll(() => mountPetStyles())
@@ -60,24 +57,27 @@ describe('气泡过渡属性', () => {
   })
 })
 
-describe('气泡退场动画真的在动', () => {
-  it('退场的气泡会滑出并淡到透明', async () => {
-    const { container, rerender } = await render(<PetBubbleLayer bubbles={[bubble('a', 1, { title: 'A' })]} />)
-    // 先等入场动画播完：元素「插入后同一帧就改样式」时浏览器没有可比的前值，
-    // 过渡压根不会建立 —— 等它成为一条静止的气泡，才是真实的收起场景
-    await vi.waitFor(() => {
-      expect(container.querySelector('.dsh-pet__bubble--entering')).toBeNull()
-    }, { timeout: 2000 })
+describe('气泡退场样式', () => {
+  it('退场时淡到 0，并沿方向滑出去', () => {
+    // 用静止元素读终点样式：与浏览器是否在这一次运行里建立过渡无关，永远可判定。
+    const host = document.createElement('div')
+    host.className = 'dsh-pet__bubbles--top'
+    const leaving = document.createElement('div')
+    leaving.className = 'dsh-pet__bubble dsh-pet__bubble--front dsh-pet__bubble--leaving'
+    host.append(leaving)
+    document.body.append(host)
 
-    await rerender(<PetBubbleLayer bubbles={[]} />)
-    const leaving = query(container, '.dsh-pet__bubble--leaving')
-
-    // 过渡只在真实样式变化时才会建立，所以这一条同时证明「淡出 + 滑出」都被接上了
-    await vi.waitFor(() => {
-      const properties = transitionProperties(leaving)
-      expect(properties).toContain('opacity')
-      expect(properties).toContain('translate')
-    }, { timeout: 200 })
+    try {
+      const style = getComputedStyle(leaving)
+      // 淡出
+      expect(style.opacity).toBe('0')
+      // 沿背离宠物的方向滑出：`translate` 的百分比相对自身尺寸，无高度的元素解析成 0px，
+      // 所以这里断言「规则生效了」（不是 `none`），具体位移由行内层叠与真实高度决定
+      expect(style.translate).not.toBe('none')
+    }
+    finally {
+      host.remove()
+    }
   })
 })
 

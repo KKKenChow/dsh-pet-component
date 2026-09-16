@@ -107,6 +107,38 @@ describe('气泡层队列', () => {
     const { container } = await render(<PetBubbleLayer bubbles={[bubble('a', 1, { title: 'A' })]} />)
     expect(query(container, '.dsh-pet__bubble').getAttribute('role')).toBe('status')
   })
+
+  it('四种语义色各自渲染内置图标', async () => {
+    const variants = ['default', 'success', 'warning', 'danger'] as const
+    const { container } = await render(
+      <PetBubbleLayer bubbles={variants.map((variant, index) => bubble(`v${index}`, index + 1, { variant }))} />,
+    )
+
+    for (const variant of variants)
+      expect(query(container, `.dsh-pet__bubble--${variant} .dsh-pet__bubble-indicator svg`)).not.toBeNull()
+  })
+
+  it('宿主显式给了 icon 就覆盖内置图标', async () => {
+    const { container } = await render(
+      <PetBubbleLayer bubbles={[bubble('a', 1, { title: 'A', icon: <b data-custom="1" /> })]} />,
+    )
+
+    expect(container.querySelector('.dsh-pet__bubble-indicator b')).not.toBeNull()
+    // 内置图标没有被渲染出来（宿主给了就只用宿主的）
+    expect(container.querySelector('.dsh-pet__bubble-indicator svg')).toBeNull()
+  })
+
+  it('加载态换成圆环（两段圆弧 + 两个渐变，id 由 useId 派生）', async () => {
+    const { container } = await render(<PetBubbleLayer bubbles={[bubble('a', 1, { loading: true })]} />)
+
+    const spinner = query(container, '.dsh-pet__bubble-spinner')
+    expect(spinner.getAttribute('aria-hidden')).toBe('true')
+    const gradients = [...spinner.querySelectorAll('linearGradient')]
+    expect(gradients).toHaveLength(2)
+    const ids = gradients.map(gradient => gradient.getAttribute('id'))
+    expect(ids.every(id => id !== null && id !== '')).toBe(true)
+    expect(new Set(ids).size).toBe(2)
+  })
 })
 
 describe('气泡出场生命周期', () => {

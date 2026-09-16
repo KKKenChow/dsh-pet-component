@@ -33,6 +33,7 @@
     "start": "tsx src/index.ts",
     "test": "pnpm run build && vitest",
     "test:browser": "vitest run --project browser",
+    "test:coverage": "pnpm run build && vitest run --coverage",
     "test:unit": "pnpm run build && vitest run --project unit",
     "typecheck": "tsc",
     "prepare": "git config core.hooksPath .githooks && simple-git-hooks && skills-npm"
@@ -46,6 +47,7 @@
     "start": "Run the entry file",
     "test": "Run the test suite",
     "test:browser": "Run the browser test suite (real DOM, real event loop)",
+    "test:coverage": "Run the test suite with a coverage report (90% threshold)",
     "test:unit": "Run the node unit test suite",
     "typecheck": "Check types",
     "prepare": "Set up git hooks and skills"
@@ -71,6 +73,7 @@
     "@vitejs/plugin-react": "catalog:",
     "@vitest/browser": "catalog:testing",
     "@vitest/browser-playwright": "catalog:testing",
+    "@vitest/coverage-v8": "catalog:testing",
     "bumpp": "catalog:cli",
     "eslint": "catalog:cli",
     "eslint-plugin-react-refresh": "catalog:",

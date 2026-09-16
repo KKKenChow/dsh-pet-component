@@ -6,10 +6,10 @@
 [![JSDocs][jsdocs-src]][jsdocs-href]
 [![License][license-src]][license-href]
 
-统一跨协议桌宠 React 组件：只需更换 `config` 或 `uri` 即可无缝切换底层协议，无需宿主编写额外的分支逻辑。
+统一跨协议桌宠 React 组件：只需更换 `config` 或 `uri` 即可无缝切换底层渲染协议，无需宿主编写额外的分支逻辑。
 
 | 协议名称 | 配置文件 | 资源文件 |
-| :--- | :--- | :--- |
+| --- | --- | --- |
 | **[Dsh Pet](https://github.com/PC2005-cloud/dsh-pet)** | `assets/config.jsonc` | 逐动作透明视频（VP9-alpha `.webm` / macOS HEVC-alpha `.mov`） |
 | **[Codex Pet](https://github.com/Signalight/codex-to-dsh-pet)** | `pet.json` | 8 列单图雪碧图（192×208，9 行 v1 / 11 行 v2） |
 
@@ -17,16 +17,16 @@
 
 ## ✨ 核心特性
 
-- 🧭 **统一入口**：根据 `config` 结构自动识别渲染器，亦可显式设置 `kind` 参数强行指定。
-- 🎬 **无缝无黑帧**：内置双 `<video>` 交叉淡入缓冲机制，新动画加载完（`loadeddata`）后才切换至前台。
-- 🎭 **同构动作池**：内置 14 个同构动作（覆盖 dsh-pet 的 `workStatus` 档位），集成默认循环语义。
-- 🎮 **双模控制**：支持声明式（`motion` prop）与命令式（`pet.motion(...)` 插播）混合使用。
-- 🖱️ **智能拖拽分流**：dsh-pet 播放「悬空拽起」动画，Codex 智能切为「左右行走」模式；命中区独立安全隔离。
-- ⚡ **内置双击**：连按两次即插播 `waving`（dsh 取 `animations.clicks` 池，Codex 走 `waving` 行）
-- 💾 **跨会话缓存**：内置 IndexedDB 缓存机制（`cache` 默认开启），实现 Blob 与 Object URL 跨会话复用。
-- 🍎 **多平台适配**：macOS 自动走 HEVC-alpha 资源，其余平台走 VP9-alpha；自动探测切换，宿主无需编写任何分支逻辑。
+* 🧭 **统一入口**：根据 `config` 自动推导渲染引擎（Dsh/Codex），支持显式指定 `kind`。
+* ⚡ **自适应渲染引擎**：智能路由算法，自动调配 WebGL / Canvas / Video 渲染管线，确保在不同硬件配置下均可获得极佳流畅度。
+* 🍎 **多端动态适配策略**：客户端环境自动感知。macOS 原生使用 HEVC-alpha，其他平台无缝降级至 VP9-alpha，避免编解码异常。
+* 🎬 **双轨无黑帧**：内置双 `<video>` 交叉淡入缓冲机制，新动画完全加载（`loadeddata`）后才无缝切至前台。
+* 🎭 **同构动作池**：内置 14 个同构动作，覆盖 dsh-pet 的 `workStatus` 档位并继承默认循环语义。
+* 🎮 **双模控制**：支持声明式（`motion` prop）与命令式（`pet.motion(...)`）灵活混用。
+* 🖱️ **智能拖拽分流**：dsh-pet 播放「悬空拽起」动画；Codex 自动转换为「左右行走」模式。
+* 💾 **跨会话持久化**：基于 IndexedDB 缓存 Blob 与 Object URL，实现资源跨会话零延迟加载。
 
-> Web IndexedDB 可能需要处理 CORS 的情况，所以 IndexedDB 缓存不太适用纯浏览器的场景
+> **注意**：网页端的 IndexedDB 可能受 CORS 限制，纯跨域请求场景建议结合代理或关闭缓存。
 
 ---
 
@@ -34,9 +34,10 @@
 
 ```bash
 pnpm add dsh-pet-component react
+
 ```
 
-> **注意**：`react >= 19` 作为对等依赖（Peer Dependency）。
+> **依赖要求**：`react >= 19` 需作为 Peer Dependency 安装。
 
 ---
 
@@ -61,19 +62,18 @@ export function App() {
     />
   )
 }
+
 ```
 
-> `config` 属性亦可直接传入配置对象以跳过 `useConfig` 异步加载。
-
-查看在线浏览：https://dsh-pet-component.vercel.app/
+🔗 [查看在线 Demo](https://dsh-pet-component.vercel.app/)
 
 ---
 
 ## 💡 进阶指南
 
-### 外部控制与插播机制
+### 1. 外部控制与插播
 
-使用 `useControllablePet` hook 可实现动作命令式下发。命令优先级**高于** `motion` prop，并持续有效直至 `motion` 值改变。
+通过 `useControllablePet` hook 下发命令式动作。命令层优先级**高于** `motion` prop。
 
 ```tsx
 import type { PetRef } from 'dsh-pet-component'
@@ -84,37 +84,20 @@ export function App() {
   const petRef = useRef<PetRef>(null)
   const pet = useControllablePet(petRef)
 
-  // 命令控制模式
-  pet.motion({ type: 'thinking', loop: true }) // 1. 强制循环播放
-  pet.motion({ type: 'result' })               // 2. 播放一次后自动回落到 idle
-  pet.motion({ type: 'waving', replay: true }) // 3. 强制重播同一动作
-  pet.clear()                                  // 4. 清除命令层，回落至 motion prop 状态
+  // 命令式控制
+  pet.motion({ type: 'thinking', loop: true }) // 强制循环播放
+  pet.motion({ type: 'result' })               // 播放一次后自动回落到 idle
+  pet.motion({ type: 'waving', replay: true }) // 强制从头重播
+  pet.clear()                                  // 清除命令层，恢复 motion prop
 
   return <Pet ref={petRef} config={config} uri={{ default: '/pets/main/webm' }} />
 }
+
 ```
 
-**混合状态工作流：**
+### 2. 拖拽交互集成
 
-```tsx
-// 声明当前工作状态
-<Pet motion={{ type: 'working', loop: true }} ref={petRef} /> 
-
-// 命令式插播事件
-pet.motion({ type: 'waving' }) // 临时插播：挥手
-pet.clear()                    // 撤销插播，无缝自动回落至 'working'
-```
-
-### 拖拽交互
-
-拖拽属于最高优先级的**手势态**。可通过 `dragging` prop 显式指定，或使用 `pet.motion({ type: 'dragging' })` 下发：
-
-| 维度 | dsh-pet | Codex Pet |
-| --- | --- | --- |
-| **拖拽表现** | 循环播放 `animations.drag`（被无形抓起悬空） | 根据移动方向自动切为左右行走 |
-| **走路素材** | 使用 `animations.moves`（`moving-left` / `moving-right`） | 复用同一套行走向素材 |
-
-容器推移可配合 [@reause/core](https://reause.netlify.app/core/useDraggable/) 的 `useDraggable` 使用：
+配合 `@reause/core` 的 `useDraggable` 实现流畅拖拽：
 
 ```tsx
 import { useDraggable } from '@reause/core'
@@ -125,270 +108,113 @@ export function App() {
   const hitboxRef = useRef<HTMLDivElement>(null)
 
   const { x, y, isDragging } = useDraggable(boxRef, {
-    handle: hitboxRef, // 仅允许命中框起拖
+    handle: hitboxRef,
     initialValue: { x: 80, y: 80 },
   })
 
   return (
     <div ref={boxRef} style={{ position: 'fixed', left: x, top: y, pointerEvents: 'none' }}>
-      <Pet config={config} dragging={isDragging} hitboxRef={hitboxRef} ref={petRef} uri={uri}/>
+      <Pet config={config} dragging={isDragging} hitboxRef={hitboxRef} uri={uri} />
     </div>
   )
 }
+
 ```
 
-> **事件拦截设计**：视频容器设置 `pointer-events: none`，仅 `.dsh-pet__hitbox` 接收指针事件。
-> **安装提示**：`@reause/core` 为内部依赖，但在 strict node_modules（如 pnpm）环境中需单独显式声明安装：`pnpm add @reause/core`。
-
-### 双击交互
-
-双击是**「点击回应」手势**，`<Pet>` 已内置判定：命中框上两次按下间隔小于 500ms 即插播一次 `pet.motion({ type: 'waving', replay: true })`，宿主不需要自己接线。协议差异全部由组件抹平：
-
-| 维度 | dsh-pet | Codex Pet |
-| --- | --- | --- |
-| **双击表现** | 从 `animations.clicks` 池抽一条播放（`motion: 'waving'`） | 播 `waving` 行（row 3，4 帧 × 140ms） |
-| **回落语义** | 单次触发类（`loop: false`），播完回落 `idle` | 同左 |
-
-* **只认双击**：单击不发任何动作，不会与状态动画、拖拽抢画面；`replay: true` 保证连按两次都能从头播。
-* **松手才落地**：命中在第二次按下的 `pointerup` 才触发；传了 `dragging` 时，窗口内一旦变成拖动就作废窗口并丢掉待定的那次 ——「点一下 → 500ms 内又拖一下」不会误播。
-* **与宿主回调共存**：内置判定叠加在你传入的 `onHitboxPointerDown` / `onHitboxPointerUp` / `onHitboxPointerCancel` 之外，宿主自己的指针回调照常收到事件。
-* **实现**：判定窗口用 [@reause/core](https://github.com/hairyf/reause) 的 `useStateAutoReset` 表达，见 `src/hooks/use-double-click.ts`。
-
-### 气泡与碎碎念
-
-**气泡**（`pet.bubble`）是纯展示层：宿主管内容，组件管叠加、原地更新、定时收起与捆绑运行动画。观感对齐桌面端（`deepseek-harness-desktop`）的 toast：标题与正文 14px（标题 medium）、正文两行截断、24px 圆角、语义色只染标题与图标（图标直接取自 `@gravity-ui/icons` —— `CircleInfo` / `CircleCheck` / `TriangleExclamation` / `CircleExclamation`，加载态是 HeroUI 的 `Spinner`）。整组度量按宠物实测宽度（`--dsh-pet-size`）等比缩到与宠物合身，多条时按 toast 的层叠规则叠放（缩放系数 0.05、间距 12px，越旧越靠后）。
+### 3. 气泡与碎碎念 (Bubble & Muttering)
 
 ```ts
-const key = pet.bubble({ id: 's1', title: '会话标题', description: '正在分析代码…', loading: true, motion: 'thinking' })
+// 下发与更新气泡
+pet.bubble({ id: 'task-1', title: '分析中...', loading: true, motion: 'thinking' })
+pet.bubble({ id: 'task-1', title: '完成！', variant: 'success', motion: 'success' }) // 原地更新
 
-// 同一个 id 再下发 = 原地更新：只换内容，不重新淡入、不重置收起计时
-pet.bubble({ id: 's1', description: '分析完成：改了 3 个文件', loading: false, variant: 'success', motion: 'success' })
+pet.bubble.close('task-1') // 关闭指定气泡
+pet.bubble.clear()         // 清空气泡
 
-pet.bubble.close('s1') // 不给 id = 收起最近一条
-pet.bubble.clear()
 ```
 
-| 选项 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `string` | 自增 | 稳定 key；同 id 再次下发即原地更新 |
-| `title` / `description` / `icon` | `ReactNode` | — | 标题行 / 正文（可更新文字）/ 图标槽 |
-| `image` | `string` | — | 配图地址（宿主给完整 URL） |
-| `loading` | `boolean` | `false` | 显示内置 CSS 圆环（加载态） |
-| `variant` | `'default' \| 'success' \| 'warning' \| 'danger'` | `'default'` | 语义色，决定内置图标与默认收起时长 |
-| `motion` | `MotionInput` | — | 会话档位；**常驻**气泡（`timeout: 0`）按 `STATUS_PRIORITY` 聚合后声明式交给 `<Pet>`，**限时**气泡的动画改由 `Pet` 用 `pet.motion(...)` 播一次 |
-| `timeout` | `number` | 按档位 | 自动收起 ms（`success` 3000 / `failed`·`error` 4000 / `review` 2500；其余档位常驻） |
-| `placement` | `'top' \| 'bottom'` | `'top'` | 相对宠物的方向 |
-
-同时最多显示 **3 条**，超出关最旧（对齐桌面端 `MAX_VISIBLE_TOASTS`）。气泡层由 `<Pet>` 自己挂在 `.dsh-pet-shell` 上 —— `DshPet` / `CodexPet` 两个渲染器里没有任何气泡逻辑。
-
-**碎碎念**（`muttering`）是触发层：组件管节拍与提示词，宿主管模型生成 —— 与 dsh-pet 的分工一致。
-
 ```tsx
+// 配置自动碎碎念
 <Pet
   config={config}
   uri={uri}
-  muttering                  // 缺省回落 config 的 pets[i].whisperEnabled
-  mutteringIntervalSec={300} // 缺省 config.eventsRefreshSec.whisper，再缺省 3600（下限 1 秒）
-  mutteringImage             // 缺省回落 config.whisperImageEnabled
-  onMuttering={(prompt, { petId, reason, intervalSec, meme }) => {
-    generate(prompt, meme).then(text => pet.muttering(text, { image: meme && memeUrl(meme.name) }))
+  muttering
+  mutteringIntervalSec={300}
+  onMuttering={(prompt, { meme }) => {
+    generateAI(prompt).then(text => pet.muttering(text))
   }}
 />
-```
 
-* **首拍只记基线**：挂载后第一次到点以 `reason: 'baseline'` 通知宿主，且这期间推回的文本**不会展示**（对应 dsh-pet 的 `hasBaseline`，避免启动/刷新时重放旧句子）；`mutteringImmediate` 可关掉这个行为。
-* **宿主推回才展示**：组件不持有 Promise。`pet.muttering(text, { image?, duration? })` 从 `animations.events.whisper` 整池随机抽一段动画播放（避开上一段），并弹一条碎碎念气泡（**随那段插播动画结束而收起**，`mutteringDuration` 是硬上限）；这句话走 `title`（说话语气、不占图标位），配图走 `image`；池为空时回落 `mutteringMotion`（缺省 `waving` —— Codex 图集走这条）。
-* **状态登记处与可见层是两层**（移植自参考实现的 `sessions` / toast 分层）：`pet.bubble({ id, motion })` 登记的档位留在状态机里，可见气泡每处最多 3 条 —— 被上限挤下去、或到点收起，都**只影响可见层**。所以「三条叠加挤掉常驻的加载态」之后，加载动画仍然在（那三条是限时的，压根不参与聚合）。
-* **两条动画通道**（关键，决定动画会不会被气泡掐断）：
-  - **常驻气泡**（`timeout: 0`，如工作档 / 等待档 / 你显式 `timeout: 0` 的加载态）→ 参与聚合 → 由 `<Pet motion>` **声明式**驱动。状态在，动画就在。
-  - **限时气泡**（`timeout > 0`，如 `success` 3000 / `failed`·`error` 4000 / `review` 2500）→ **不进聚合** → `Pet` 用 `pet.motion(...)` **播一次**。动画由命令面自己播完，气泡到点自己收，谁也掐不断谁。
-  - 这条取代了早期的「终态档聚合保持窗口」（`FAILED_PULSE_TTL` / `TERMINAL_PULSE_TTL`）：那个窗口正是拿聚合态去掐/留动画，所以失败档（上游 1.8s）会在动画中途把状态撤掉。
-* **碎碎念气泡跟着它的插播动画走**：`events.whisper` 那段插播播完（渲染器回报的动画不再是它）就收起气泡，`mutteringDuration`（缺省 10s）只是宿主可调的硬上限。
-* **收起过的不再被同一档位重建**：终态档（`success` / `failed` / `error`）自动收起后**档位没变**就不重弹（对齐上游 `dismissed`：状态重复上报不该把刚收起的气泡又弹回来）；档位换了、或显式 `timeout` 的通知气泡收起后再推，都会照常出现。
-* **只有终态档会自己收起**：`success` 3000 / `failed`·`error` 4000 / `review` 2500，其余档位（工作档、等待档）常驻等状态变化；`loading: true` 一律回到 Info 档（对齐 `toastContent`：`isLoading` 只出现在 `default` 档位）。聚合下发还带 100ms 合并窗口，多会话交错时不会把动画反复切回。
-* **状态压过闲聊**：出现非碎碎念气泡时碎碎念那条立即收起；插播（空闲风味动作 / 碎碎念动画）只在**纯待机**时播，状态动作一到就接手，不必等插播播完。加载态只挡**自动**碎碎念，手动 `pet.muttering(...)` / `pet.muttering.request()` 随时可用（说话优先：会先清掉状态气泡）。
-* **配图**：开启后组件从 `config.memes` 随机抽 1 张（不让模型选），把 `{ name, desc }` 放进事件载荷供宿主拼提示词，图片 URL 由宿主给。
-* **手动触发**：`pet.muttering.request()` 立即以 `reason: 'manual'` 再索取一句，绕过周期与首拍基线。
-* **失败静默**：`onMuttering` 抛错只 `console.warn`，不打断周期、不弹错误气泡。
+```
 
 ---
 
 ## 📚 API 参考
 
-组件包仅暴露以下核心导出，底层复杂的资源解析、JSONC 解析、视频缓冲控制等细节已做封装隔离。
-
-```ts
-export { Pet, useConfig, useControllablePet } from 'dsh-pet-component'
-
-```
-
-### `<Pet />` Props
+### `<Pet/>` Props 摘要
 
 | 属性 | 类型 | 默认值 | 描述 |
 | --- | --- | --- | --- |
-| `config` | `string | DshPetConfig | CodexPetConfig` | — | 配置对象或 `.json` / `.jsonc` URL 地址 |
-| `uri` | `string | { default: string; mac?: string }` | — | 资源基地址（dsh 使用对象，Codex 使用字符串） |
-| `kind` | `'dsh' | 'codex'` | *自动识别* | 强制指定渲染器类型 |
-| `ext` | `{ default: string; mac?: string }` | `{ default: 'webm', mac: 'mov' }` | dsh 视频资源扩展名（Codex 自动忽略） |
-| `size` | `number` | `462` (dsh) / `231` (Codex) | 渲染宽度 (px)，高度自适应推算 |
-| `motion` | `Motion | MotionOptions` | `'idle'` | 声明式动作状态（命令层清除后的回落值） |
-| `dragging` | `boolean` | `false` | 拖拽手势状态（优先级高于 `motion`） |
-| `cache` | `boolean` | `true` | 是否启用 IndexedDB 资源持久化缓存 |
-| `mirrored` | `boolean` | `false` | 是否开启水平翻转镜像 |
-| `hidden` | `boolean` | `false` | 隐藏元素而非卸载 DOM（保持媒体上下文常驻） |
-| `lookAtPointer` | `boolean` | `true` | *(仅 Codex v2)* `idle` 状态下根据指针方向选择视线帧 |
-| `lookDeadzone` | `number` | `24` | *(仅 Codex)* 视线选择死区半径 (px) |
-| `lookRadius` | `number` | `max(宽,高) × 1.25` | *(仅 Codex)* 视线作用半径 (px)；出界即回待机帧 |
-| `hitboxRef` | `Ref<HTMLDivElement>` | — | 绑定命中框 DOM Ref |
-| `onHitboxPointerDown / Up / Cancel` | `(e: PointerEvent) => void` | — | 命中框指针原生地事件透传回调 |
-| `onMotionChange` | `(motion: PetRenderMotion) => void` | — | 实际动作变更回调（包含自动回落 `idle`） |
-| `onAnimationChange` | `(info: PetAnimationInfo | null) => void` | — | 底层播放动画变更回调，常用于埋点或测试 |
-| `onReady` | `() => void` | — | 资源加载就绪回调 |
-| `onError` | `(error: unknown) => void` | — | 资源加载或播放异常回调 |
-| `muttering` | `boolean` | *config* | 自动碎碎念开关；缺省回落 `config.pets[i].whisperEnabled`（上游缺省 `false`） |
-| `mutteringPrompt` | `string` | *config* | 覆盖 `config.whisperPrompt`（碎碎念人设 / system 提示词） |
-| `mutteringIntervalSec` | `number` | *config* / `3600` | 碎碎念周期（秒；下限 1 秒） |
-| `mutteringImmediate` | `boolean` | `false` | 首拍即索取 —— 关掉 dsh-pet 的「首拍只记基线」 |
-| `mutteringImage` | `boolean` | *config* | 是否抽配图；缺省回落 `config.whisperImageEnabled` |
-| `mutteringDuration` | `number` | `10000` | 碎碎念气泡展示时长 ms（对齐 dsh-pet `BUBBLE_DURATION_MS`） |
-| `mutteringMotion` | `MotionInput` | `'waving'` | `events.whisper` 池为空时的回落动作 |
-| `onMuttering` | `(prompt: string, event: PetMutteringEvent) => void` | — | 「该要一句了」；宿主生成后调 `pet.muttering(text)` 推回 |
-| `ref` / `className` / `style` | — | — | 标准命令控制 Ref 及常规 DOM 属性透传 |
-
-### `useConfig`
-
-```ts
-const { config, error, loading } = useConfig<PetConfig>(url)
-
-```
-
-* **同步模式**：传入配置对象时直接返回。
-* **异步模式**：传入 URL 时首帧返回 `{ config: null, loading: true }`，支持 SSR 安全；内置去重，多个实例请求同一 URL 仅执行一次 Fetch。
-
-### `useControllablePet`
-
-```ts
-const pet = useControllablePet(petRef)
-```
-
-| 接口 / 属性 | 类型 | 描述 |
-| --- | --- | --- |
-| `motion` | `(input: MotionInput) => void` | 手动下发动作命令；`loop` 默认取动作语义，`replay: true` 强制重新触发播放 |
-| `clear` | `() => void` | 清空命令层，使动作回落至当前 `motion` prop 参数 |
-| `current` | `PetRenderMotion` | **[只读]** 当前生效的动作状态（包含 `dragging`） |
-| `bubble` | `PetBubbleHandle` | 气泡命令面：`pet.bubble({…})` / `pet.bubble.close(id?)` / `pet.bubble.clear()` |
-| `muttering` | `PetMutteringHandle` | 碎碎念命令面：`pet.muttering(text, { image?, duration? })` / `pet.muttering.request()` |
+| `config` | `string | PetConfig` | — | 配置对象或 JSON/JSONC 地址 |
+| `uri` | `string | { default: string; mac?: string }` | — | 资源请求基地址 |
+| `kind` | `'dsh' | 'codex'` | *自动识别* | 强制指定协议类型 |
+| `size` | `number` | `462` / `231` | 渲染宽度 (px) |
+| `motion` | `MotionInput` | `'idle'` | 声明式动作控制 |
+| `dragging` | `boolean` | `false` | 拖拽状态（高优先级） |
+| `cache` | `boolean` | `true` | 是否开启 IndexedDB 缓存 |
+| `mirrored` | `boolean` | `false` | 是否开启水平镜像翻转 |
+| `muttering` | `boolean` | *config* | 是否开启碎碎念 |
+| `onMotionChange` | `(motion: string) => void` | — | 实际动作变更回调 |
 
 ---
 
-## 🎭 动作映射规约
-
-统一抽象了 **14 个内置动作**，统一采用连字符小写（kebab-case）命名：
+## 🎭 14 个内置同构动作
 
 ```text
-idle        turn       moving-left   moving-right   waving     thinking 
-working     result     waiting       running        review     failed 
-success     error
+idle       turn          moving-left   moving-right   waving     thinking 
+working    result        waiting       running        review     failed 
+success    error
+
 ```
 
-* **常驻循环类**：`idle`、`moving-left`、`moving-right`、`thinking`、`working`、`result`、`waiting`、`running`，以及手势态 `dragging`。
-* **单次触发类**：除上述外，其余动作在播放一次后会自动回落到 `idle`（可通过 `loop: true` 覆盖）。
-* **粗粒度别名**：`running` / `review` / `failed` 会自动映射归类至 `working` / `result` / `error`。
+* **循环动作**：`idle`, `moving-left`, `moving-right`, `thinking`, `working`, `result`, `waiting`, `running`, `dragging`
+* **单次动作**：`turn`, `waving`, `review`, `failed`, `success`, `error`（播完自动回落 `idle`）
 
 ---
 
-## ⚙️ 配置示例
-
-### dsh-pet 配置 (JSONC)
-
-在 dsh-pet 中，底层资源与动作的映射关系如下：
-
-```jsonc
-{
-  "animations": {
-    "idle": ["待机呼吸休闲"],
-    "turn": ["东张西望"],
-    "drag": ["被鼠标拖拽悬空反馈"], // → 对应手势态 dragging
-    "clicks": ["点击回应-开心跃动"], // → 对应 waving 动作
-    "moves": { 
-      "actions": [{ "name": "螃蟹走路" }] 
-    },                          // → 对应 moving-left / moving-right
-    "events": {
-      // workStatus 对应索引：0:thinking | 1:working | 2:result | 3:waiting | 4:success | 5:error
-      "workStatus": [
-        "工作状态-思考冒泡", 
-        "工作状态-忙碌点按", 
-        "工作状态-清点归档", 
-        "工作状态-原地踱步张望", 
-        "工作状态-雀跃庆祝", 
-        "工作状态-垂头叹气冒汗"
-      ]
-    }
-  },
-  "animationWeights": { "idle": 10, "turn": 5, "move": 5 }
-}
-```
-
-也可以通过 `motions` 显式覆写指定映射关系（优先级最高）：
-
-```jsonc
-{ 
-  "motions": { 
-    "idle": "待机呼吸休闲", 
-    "working": ["忙碌点按", "写代码"], 
-    "dragging": "被鼠标拖拽悬空反馈" 
-  } 
-}
-```
-
-### Codex Pet 配置 (`pet.json`)
-
-支持原生 `pet.json` 属性（`id`, `displayName`, `spriteVersionNumber`, `spritesheetPath`）。可通过 `motions` 自定义指定行号与帧配置：
-
-```json
-{
-  "motions": {
-    "idle": 0,
-    "working": { "row": 3, "frames": 8, "interval": 100, "loop": true }
-  }
-}
-```
-
----
-
-## 🛠 本地开发与测试
-
-### Playground 运行
+## 🛠 本地开发
 
 ```bash
+# 启动 Playground 调试
 pnpm install
 cd playground && pnpm dev
+
+# 代码质量检查与测试
+pnpm run typecheck     # 类型检查
+pnpm run lint          # Code Lint
+pnpm run test:unit     # Vitest 单元测试（纯逻辑，Node 侧）
+pnpm run test:browser  # Vitest 浏览器测试（真 DOM / 真过渡 / 真媒体，跑本机 Chrome）
+pnpm run test:coverage # 两套一起跑 + 覆盖率报告（门槛 90%）
+pnpm run build         # 产物构建 (tsdown)
+
 ```
 
-> **演练场亮点**：提供单 `<Pet>` 实时预览环境，支持动态切换协议渲染器（dsh-pet / Codex）、测试动作墙与插播控制、调试拖拽机制与命中框，以及监控媒体状态指标。
+测试分成两个 Vitest project（见 `vitest.config.ts`）：`unit` 跑 `test/**/*.test.ts`，
+`browser` 跑 `test/browser/**/*.test.tsx`。浏览器那套用 `@vitest/browser-playwright` 驱动
+本机已装的 Chrome（`channel: 'chrome'`，不下载 Chromium），因此能断言真实的 CSS 过渡、
+`getAnimations()` 与媒体播放 —— 气泡进出场这类「观感」缺陷只有在这里才测得出来。
 
-### 构建与构建检查
+`pnpm run test:coverage` 只统计 `src/**` 的可执行代码（`src/types/**` 是纯类型，不计分），
+行 / 分支 / 函数 / 语句四项门槛都是 **90%**，任一项不达标命令即失败。
 
-```bash
-pnpm run typecheck    # TypeScript 类型检查
-pnpm run lint         # ESLint 代码风格规范检查
-pnpm run test:unit    # 纯逻辑单测（Vitest，含 API 快照测试；会先 build）
-pnpm run test:browser # 真浏览器测试（Vitest Browser Mode，跑本机 Chrome）
-pnpm test             # build + 全部 Vitest 项目（watch）
-pnpm run build        # 构建产物生成 (tsdown → dist/)
-```
-
-测试分两个项目（见 `vitest.config.ts`）：`unit` 覆盖纯逻辑（`createBubbleTracker` / `createBubble` /
-JSONC 解析 / API 快照），`browser` 覆盖 Node 侧根本测不到的部分 —— 真 DOM 的队列与层叠、
-**真 CSS 过渡到底动了没有**、以及 React 副作用顺序（声明层与命令面的交班规则）。
-浏览器项目用 `channel: 'chrome'` 跑本机已装的 Chrome，不需要 `playwright install`。
-```
+测试素材：仓库里没有媒体文件、演练场用的是远程 URL，所以 `test/fixtures/pets/*.webm`
+是现场生成的（生成路径与 ffmpeg 能力边界见 `test/fixtures/README.md`）。
 
 ---
 
 ## 📄 开源许可证
 
-[MIT License](https://www.google.com/search?q=./LICENSE.md) © [Hairyf](https://github.com/hairyf)
+[MIT License](https://www.google.com/search?q=./LICENSE) © [Hairyf](https://github.com/hairyf)
 
 <!-- Badges -->
 

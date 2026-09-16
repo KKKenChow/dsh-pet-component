@@ -681,3 +681,24 @@ const effectiveMotion = bubbleMotion ?? motion        // 声明式，交给渲�
 > 判断某个 hook 能不能用时，别只 grep `@reause/core` 的 `dist/index.d.ts` —— `useTimeoutFn` /
 > `useUnmount` / `useStateAutoReset` 这些都是 `export * from '@reause/shared'` 转出来的。
 > 另外 `@reause/integrations` 根导入会因缺 peer `async-validator` 报错，只能子路径导入。
+
+### 17.5 覆盖率：两个 project 合并计分，四项门槛 90%
+
+`pnpm run test:coverage`（= `vitest run --coverage`，provider `v8`）把 `unit` 与 `browser`
+两个 project 的命中**合并**统计，只对 `src/**` 的可执行代码计分：
+
+- `src/types/**` 与 `*.d.ts` 不计分 —— 它们只有类型、没有可执行语句（仍受 `typecheck` 与
+  `test/api-snapshot.test.ts` 的 API 快照保护）；
+- `source/**`（参考实现检出）、`playground/**` 与测试自身都不计入；
+- 行 / 分支 / 函数 / 语句四项门槛都是 **90%**，任一项不达标 `test:coverage` 直接失败；
+  同时打开 `reportOnFailure` —— 失败时也要把报告打出来，否则看不出差在哪；
+- 报告落在 `coverage/`（已 gitignore）：`text` 看控制台、`html` 可浏览、`json` 用于定位缺口。
+
+**测试素材**：仓库里没有媒体文件，而演练场用的是远程 URL（测试不能联网），所以
+`test/fixtures/pets/*.webm` 是现场生成的 —— 生成链路与「Playwright 自带 ffmpeg」的能力边界
+写在 `test/fixtures/README.md`。`test/browser/fixture-media.test.tsx` 守着「能取到、能解码、
+能播完（`ended`）」三件事，最后一条是 dsh「一次性动作播完 → `finish()`」可测的前提。
+
+**为什么组件/钩子必须在真浏览器里测**：覆盖率缺口的大头在 `src/components/**` 与
+`src/hooks/**`（两块合计约 2000 行），而它们的行为几乎都由「真实过渡 / 真实媒体事件 /
+真实副作用顺序」决定 —— 气泡退场的那个根因（§17.2）就是只有真浏览器才暴露出来的。

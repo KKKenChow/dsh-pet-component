@@ -11,5 +11,6 @@ logs
 node_modules
 skills/npm-*
 temp
-.agents/skillstest/browser/__screenshots__/
+.agents/skills
+test/browser/__screenshots__/
 .vitest-attachments/

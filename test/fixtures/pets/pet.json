@@ -1,0 +1,9 @@
+{
+  "id": "fixture-codex",
+  "displayName": "Fixture",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "sprite.png",
+  "columns": 8,
+  "frameWidth": 192,
+  "frameHeight": 208
+}

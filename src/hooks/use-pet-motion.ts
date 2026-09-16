@@ -22,6 +22,17 @@ export interface UsePetMotionOptions {
   ref?: Ref<PetRef | null>
   /** 生效动作变化时回调 */
   onMotionChange?: (motion: PetRenderMotion) => void
+  /**
+   * 手势态（拖动）是否正在进行。
+   *
+   * 手势态是最高优先级（参考实现 `dragHold ? 'dragging' : …`）：它一接管，渲染器就改播拖拽
+   * 动画，**未播完的一次性命令再也没有「播完」的机会**（`ended` 不会来、`finish()` 不会被调）。
+   * 这种命令要在这里作废 —— 否则松手后渲染器切回去，会把它从头重播一遍
+   * （用户报告：气泡更新为完成后，每次拖动结束都会触发一次成功动画）。
+   *
+   * 循环命令不受影响：它本来就是状态型的（thinking / working …），松手继续播才是对的。
+   */
+  dragging?: boolean
 }
 
 export interface UsePetMotionReturn {
@@ -89,7 +100,7 @@ export function retainOverrideOnPropChange(previous: PetMotionState | null): Pet
 }
 
 export function usePetMotion(options: UsePetMotionOptions): UsePetMotionReturn {
-  const { motion, ref, onMotionChange } = options
+  const { motion, ref, onMotionChange, dragging = false } = options
 
   // 全局单调递增的动作代次：prop 变化与命令面共用
   const revisionRef = useRef(0)
@@ -120,6 +131,14 @@ export function usePetMotion(options: UsePetMotionOptions): UsePetMotionReturn {
     // eslint-disable-next-line react/set-state-in-effect -- 换动作要清掉「已播完」标记，否则新动作会被上一轮的收尾状态吃掉
     setDone(null)
   }, [propKey, motion])
+
+  // 手势态（拖动）接管 → 作废未播完的一次性命令（理由见 `UsePetMotionOptions.dragging`）
+  useEffect(() => {
+    if (!dragging)
+      return
+    // eslint-disable-next-line react/set-state-in-effect -- 手势接管是命令式信号（「拖动开始的这一刻」），没有受控入口能表达它
+    setOverride(previous => (previous !== null && !previous.loop ? null : previous))
+  }, [dragging])
 
   const base = override ?? propState
 

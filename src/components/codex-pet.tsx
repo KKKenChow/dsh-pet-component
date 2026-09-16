@@ -99,7 +99,7 @@ export function CodexPet(props: CodexPetProps) {
   }, [])
 
   const { config, error: configError } = useConfig<CodexPetConfig>(configSource)
-  const { state, finish } = usePetMotion({ motion, ref, onMotionChange })
+  const { state, finish } = usePetMotion({ motion, ref, onMotionChange, dragging })
   // 减少动效跟随系统偏好（`prefers-reduced-motion`，reause 的媒体查询 hook）
   const reducedMotion = usePreferredReducedMotion() === 'reduce'
 

@@ -15,10 +15,10 @@ import { usePetMotion } from '../../src/hooks/use-pet-motion'
  */
 
 function renderMotion(initial?: MotionInput) {
-  return renderHook((props: { motion?: MotionInput } = {}) => {
+  return renderHook((props: { motion?: MotionInput, dragging?: boolean } = {}) => {
     const ref = useRef<PetRef | null>(null)
-    return usePetMotion({ motion: props.motion, ref })
-  }, { initialProps: { motion: initial } })
+    return usePetMotion({ motion: props.motion, ref, dragging: props.dragging })
+  }, { initialProps: { motion: initial, dragging: false } as { motion?: MotionInput, dragging?: boolean } })
 }
 
 describe('petMotion 交班规则', () => {
@@ -76,6 +76,48 @@ describe('petMotion 交班规则', () => {
     })
 
     expect(view.result.current.state.type).toBe('waiting')
+  })
+
+  it('拖动接管会作废未播完的一次性命令 —— 「拖完又播一次成功」回归守卫', async () => {
+    const view = await renderMotion('thinking')
+    await view.act(() => {
+      view.result.current.request({ type: 'success', replay: true })
+    })
+    expect(view.result.current.state.type).toBe('success')
+
+    // 拖动期间渲染器改播拖拽动画：这个一次性命令再也没有「播完」的机会
+    await view.rerender({ motion: 'thinking', dragging: true })
+    expect(view.result.current.state.type).toBe('thinking')
+
+    // 松手后回到声明层，而不是把成功动画从头再播一遍
+    await view.rerender({ motion: 'thinking', dragging: false })
+    expect(view.result.current.state.type).toBe('thinking')
+  })
+
+  it('拖动不影响循环命令（状态型动画，松手继续播）', async () => {
+    const view = await renderMotion('idle')
+    await view.act(() => {
+      view.result.current.request({ type: 'working', loop: true })
+    })
+    expect(view.result.current.state.type).toBe('working')
+
+    await view.rerender({ motion: 'idle', dragging: true })
+    expect(view.result.current.state.type).toBe('working')
+
+    await view.rerender({ motion: 'idle', dragging: false })
+    expect(view.result.current.state.type).toBe('working')
+  })
+
+  it('拖动期间下发的一次性命令照常播（松手后仍生效）', async () => {
+    const view = await renderMotion('idle')
+    await view.rerender({ motion: 'idle', dragging: true })
+    await view.act(() => {
+      view.result.current.request({ type: 'success', replay: true })
+    })
+    expect(view.result.current.state.type).toBe('success')
+
+    await view.rerender({ motion: 'idle', dragging: false })
+    expect(view.result.current.state.type).toBe('success')
   })
 
   it('声明层自己的一次性动作播完才回落待机', async () => {

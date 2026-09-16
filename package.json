@@ -32,6 +32,8 @@
     "release": "bumpp",
     "start": "tsx src/index.ts",
     "test": "pnpm run build && vitest",
+    "test:browser": "vitest run --project browser",
+    "test:unit": "pnpm run build && vitest run --project unit",
     "typecheck": "tsc",
     "prepare": "git config core.hooksPath .githooks && simple-git-hooks && skills-npm"
   },
@@ -43,6 +45,8 @@
     "release": "Bump version and publish a release",
     "start": "Run the entry file",
     "test": "Run the test suite",
+    "test:browser": "Run the browser test suite (real DOM, real event loop)",
+    "test:unit": "Run the node unit test suite",
     "typecheck": "Check types",
     "prepare": "Set up git hooks and skills"
   },
@@ -64,12 +68,16 @@
     "@types/node": "catalog:types",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@vitest/browser": "catalog:testing",
+    "@vitest/browser-playwright": "catalog:testing",
     "bumpp": "catalog:cli",
     "eslint": "catalog:cli",
     "eslint-plugin-react-refresh": "catalog:",
     "eslint-plugin-slop": "catalog:cli",
     "eslint-plugin-sonarjs": "catalog:cli",
     "nano-staged": "catalog:cli",
+    "playwright": "catalog:testing",
     "publint": "catalog:cli",
     "react": "catalog:",
     "react-dom": "catalog:",
@@ -81,7 +89,8 @@
     "tsx": "catalog:cli",
     "typescript": "catalog:cli",
     "vite": "catalog:cli",
-    "vitest": "catalog:testing"
+    "vitest": "catalog:testing",
+    "vitest-browser-react": "catalog:testing"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm --config.manage-package-manager-versions=true i --frozen-lockfile --ignore-scripts --offline && pnpm run build && npx nano-staged"

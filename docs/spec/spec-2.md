@@ -540,6 +540,10 @@ const effectiveMotion = bubbleMotion ?? motion        // 声明式，交给渲�
 要求「直接把上游 `use-bubble.ts` / `bubble-tracker.ts` / `bubble.ts` 拿过来用，然后调整」。
 读完参考实现后确认：**我之前把两层揉成了一层**。
 
+> **本节部分内容已被 §17 取代**：终态档的「脉冲窗口」（`failedUntil` / `TERMINAL_PULSE_TTL` /
+> `trackFailedPulse`）整套机制已删除，动作改由「常驻 → 声明式聚合 / 限时 → 命令面播一次」两条通道
+> 承担（§17.1）。两层的结构划分（状态登记处 vs 可见层）不变。
+
 | 层 | 参考实现 | 本仓库现在 |
 | --- | --- | --- |
 | 状态登记处（动作来源） | `bubble-tracker.ts` 的 `sessions` / `failedUntil` / `previousStatus` / `dismissed` | `src/utils/bubble-tracker.ts` 同名同义 |
@@ -583,5 +587,73 @@ const effectiveMotion = bubbleMotion ?? motion        // 声明式，交给渲�
 ### 16.3 与 §15 的关系
 
 §15.1 的 `aggregateBubbleMotion()` 已被 `bubble-tracker.ts` 的 `statusOf()` 取代（同一张
-`BUBBLE_MOTION_PRIORITY` 表，多了脉冲窗口与合并窗口）；`src/utils/bubble.ts` 只留纯逻辑
+`BUBBLE_MOTION_PRIORITY` 表 + 100ms 合并窗口）；`src/utils/bubble.ts` 只留纯逻辑
 （常量、档位判定、单条条目的补齐与原地更新），不再持有聚合。
+
+## 17. 两通道模型与真浏览器测试（同日，用户裁定 + 一个真根因）
+
+### 17.1 动作走哪条通道，只看气泡是不是常驻
+
+用户裁定：
+
+> 固定的 toast（`timeout: 0`）→ 参与聚合 → `<Pet motion>` 声明式驱动；
+> 不是固定的 toast（`timeout > 0`）→ 不进聚合 → `Pet` 用 `pet.motion(...)` 播一次。
+
+于是 `src/utils/bubble.ts` 删掉 `BUBBLE_TERMINAL_PULSE_TTL` / `PULSE_MOTIONS` / `hasPulseWindow` /
+`terminalPulseTtlOf`，`src/utils/bubble-tracker.ts` 删掉 `failedUntil` / `consumedFailed` /
+`pulseTimers` / `trackTerminalPulse`，`statusOf()` 只聚合**常驻**会话
+（`resolveBubbleTimeout(session) > 0` 直接跳过）。§16 里「终态档有独立脉冲窗口」的那套**已被取代**
+—— 那个窗口本质上是在用聚合态去掐/留动画，所以上游 `FAILED_PULSE_TTL = 1800` 会在动画中途撤状态。
+
+| 通道 | 谁下发 | 什么时候收 |
+| --- | --- | --- |
+| 声明式 | 常驻气泡聚合出的 `motion` prop | 气泡收起 → 聚合态变化 → prop 变化 |
+| 命令式 | `Pet` 的限时气泡 effect 调 `pet.motion({ …input, replay: true })` | 动作自己播完 → `finish()` 交还声明层 |
+
+限时气泡用 `bubble.created` + `motionKey(input)` 去重，同一条气泡只下发一次。
+
+`src/hooks/use-pet-motion.ts` 的两条交班规则（由 `test/browser/use-pet-motion.test.tsx` 锁住）：
+
+1. `motion` prop 变化时，**正在播的一次性命令保留到播完**（`retainOverrideOnPropChange`）；循环命令
+   立即作废、由 prop 接管。原因：常驻气泡改成限时气泡时，聚合态会先落下来（限时那条不进聚合），
+   而命令面要等 `Pet` 的 effect 才下发 —— 两次更新落在不同 React 批次（聚合还有 100ms 合并窗口）。
+   若这一次 prop 变化把命令面清掉，刚起播的庆祝动画就被掐断 —— 用户看到的就是「直接变成待机」。
+2. `finish()` 对**命令面**的一次性动作是「清 override + 清 done」→ 回落声明层（而不是 `idle`）；
+   只有声明层自己的一次性动作才走 `PET_FALLBACK_MOTION`。否则一次庆祝播完，正在进行的会话状态
+   （thinking / waiting）会掉成待机。
+
+### 17.2 退场动画的根因：退场项必须在**渲染期**登记
+
+现象（用户报告）：「气泡消失的时候没有动画」。真浏览器里量出来的是 `getAnimations()` 为空、
+`opacity` 在任何采样点都已经是终点值 —— 过渡压根没建立。
+
+根因：`useLayerBubbles` 原来在 `useEffect` 里把消失的气泡挪进 `leaving`。effect 要等这次提交结束才跑，
+于是中间先提交了一帧「旧条目已经没了、退场条目还没上」的树：React 把退场那条当成**新节点**挂载，
+而新节点一上来就是终点样式（`opacity: 0` / `translate: -100%`），浏览器不会为「初始值就等于目标值」
+建立过渡；只有一条气泡时 `items.length === 0` 还会让整层先返回 `null`，连节点带层一起拆掉再重建。
+
+修法：登记挪到**渲染期**（React 的「props 变化时调整 state」模式）。渲染期的自身 state 更新不提交
+那棵中间树 —— 同一次提交里旧条目消失、退场条目出现，`key={bubble.id}` 不变 → DOM 节点原地保留 →
+过渡照常发生。计时器仍留在 effect 里（副作用），key 用 `${id}:${created}` **分代**，到点按
+**对象身份**摘除，同 id 的下一轮退场项不会被上一轮误删。
+
+修好后真浏览器读数：`animations=[CSSTransition:opacity, CSSTransition:translate]`，60ms 时
+`opacity=0.42`、`translate=0px -29.5%` —— 确实是滑出 + 淡出。
+
+### 17.3 真浏览器测试（`test/browser/`）
+
+`vitest.config.ts` 拆成两个项目：`unit`（`test/**/*.test.ts`：纯逻辑 + API 快照）与
+`browser`（`test/browser/**/*.test.tsx`：Vitest Browser Mode）。provider 用
+`@vitest/browser-playwright` 的 `channel: 'chrome'`，跑本机已装的 Chrome，不下载 Chromium。
+
+- `bubble-layer.test.tsx`：队列顺序与层叠、`role=status`、**收起后先留 `--leaving` 到点才卸载**、
+  退场保持原层叠位、同 id 重推时退场那条让位、**入场 class 到点摘掉**、
+  **被顶到最前的老气泡不重播入场**（「闪两次」回归守卫）。
+- `bubble-animation.test.tsx`：真样式与真过渡 —— 过渡属性覆盖 `opacity / translate / scale`、
+  入场动画是 `dsh-pet-bubble-in`、**退场气泡真的建起了 `opacity` + `translate` 过渡**、
+  非最前那条的内容透明、被顶到最前才淡回。
+- `use-pet-motion.test.tsx`：§17.1 的两条交班规则（命令不被 prop 掐断、循环命令被接替、
+  `finish()` 交还声明层、`clear()` 回落、重复下发不重播而 `replay` 重播）。
+
+> 两个容易踩的时序事实：元素「插入后同一帧就改样式」时浏览器没有可比的前值，过渡不会建立
+> （所以测退场要先等入场动画播完）；折叠态的内容是**淡出**到 0 的（200ms），不能同步读。

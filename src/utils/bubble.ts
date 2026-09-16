@@ -11,7 +11,6 @@ import type { MotionInput, PetRenderMotion } from '../types/motion'
  * | --- | --- |
  * | `MAX_VISIBLE_BUBBLES` | `src/utils/toast.ts` 的 `MAX_VISIBLE_TOASTS` |
  * | `BUBBLE_TERMINAL_TIMEOUT` | `src/pet/utils/bubble-tracker.ts` 的 `scheduleHide` |
- * | `BUBBLE_TERMINAL_PULSE_TTL` | 同文件的 `FAILED_PULSE_TTL` / `TERMINAL_PULSE_TTL` |
  * | `BUBBLE_MOTION_PRIORITY` | 同文件的 `STATUS_PRIORITY` |
  */
 
@@ -32,23 +31,10 @@ export const BUBBLE_TERMINAL_TIMEOUT: Partial<Record<PetRenderMotion, number>> =
   success: 3000,
 }
 
-/**
- * **终态档的聚合保持窗口** ms（对齐参考实现的 `trackFailedPulse`）：气泡收起之后，
- * 动作还要多留一会儿，让动画完整播完。
- *
- * 上游注释原文（同一份用户报告）：成功终态动画（如雀跃庆祝）实际播放时长超过
- * `SUCCESS_TOAST_TIMEOUT`(3s)，聚合状态提前回落会让动画被掐在半截。所以：
- * `success` / `error` 保持 `TERMINAL_PULSE_TTL = 10000`。
- *
- * `failed` 上游给的是 `FAILED_PULSE_TTL = 1800`，在本组件里站不住：失败的动画同样比它自己的
- * 气泡长，1.8s 就把状态撤掉 = 当场从失败动画跳回待机（用户报告「气泡还没消失，动画先消失了」）。
- * 所以三个终态档统一 10000 —— 与成功那条完全同一套语义：**气泡按时长自己收，动画自己播完**。
- */
-export const BUBBLE_TERMINAL_PULSE_TTL: Partial<Record<PetRenderMotion, number>> = {
-  failed: 10000,
-  error: 10000,
-  success: 10000,
-}
+/* 注：**没有**「终态档聚合保持窗口」这种东西。限时气泡（`timeout > 0`）根本不参与声明式聚合，
+ * 它的动画由 `Pet` 用 `pet.motion(...)` 播一次、自己播完（见 `pet.tsx`）；参与聚合的只有常驻
+ * 气泡（`timeout: 0`）。早期照搬上游 `FAILED_PULSE_TTL` / `TERMINAL_PULSE_TTL` 的那套窗口
+ * 已经被删掉 —— 它的作用就是用聚合态去掐/留动画，而正解是让命令面的动画自己结束。 */
 
 /**
  * 聚合优先级（对齐 `STATUS_PRIORITY`）：数值越大越优先，同档取先登记的会话。
@@ -80,13 +66,6 @@ export const BUBBLE_MOTION_PRIORITY: Record<PetRenderMotion, number> = {
  * `failed` / `review` / `error` / `success`。
  */
 const TERMINAL_MOTIONS: readonly PetRenderMotion[] = ['failed', 'review', 'error', 'success']
-
-/**
- * 有**脉冲窗口**的档位（参考实现 `trackFailedPulse` 里判断的那三个）：
- * `failed` / `error` / `success`。注意 `review` 不在其中 —— 它照常参与聚合，
- * 只是气泡自己 2.5s 收起。
- */
-const PULSE_MOTIONS: readonly PetRenderMotion[] = ['failed', 'error', 'success']
 
 /** 归一化动作入参到动作名（去掉 `{ type, loop, replay }` 这层形状）。 */
 export function motionType(input: MotionInput | undefined): PetRenderMotion | undefined {
@@ -121,18 +100,6 @@ export function terminalTimeoutOf(input: MotionInput | undefined): number | unde
   return type === undefined ? undefined : BUBBLE_TERMINAL_TIMEOUT[type]
 }
 
-/** 终态档的聚合保持窗口 ms；无窗口返回 0。 */
-export function terminalPulseTtlOf(input: MotionInput | undefined): number {
-  const type = motionType(input)
-  return type === undefined ? 0 : (BUBBLE_TERMINAL_PULSE_TTL[type] ?? 0)
-}
-
-/** 有脉冲窗口的档位（`statusOf` 的终态回落只对这三个生效）。 */
-export function hasPulseWindow(input: MotionInput | undefined): boolean {
-  const type = motionType(input)
-  return type !== undefined && PULSE_MOTIONS.includes(type)
-}
-
 /**
  * 解析自动收起时长：
  *
@@ -140,6 +107,9 @@ export function hasPulseWindow(input: MotionInput | undefined): boolean {
  * 2. 否则按**动作档位**（= 状态，参考实现里 variant 也是由状态推导的，所以这里不看
  *    `variant`）取终态档时长；
  * 3. 都不成立 → `0`（常驻）。
+ *
+ * 这个时长同时决定气泡走哪条动画通道（见 `pet.tsx`）：`0` → 声明式 `motion` prop；
+ * `> 0` → 命令面 `pet.motion(...)` 播一次。
  */
 export function resolveBubbleTimeout(input: { motion?: MotionInput, timeout?: number }): number {
   if (input.timeout !== undefined)

@@ -24,17 +24,14 @@ interface Harness {
 }
 
 function setup(options: BubbleTrackerOptions = {}): Harness {
-  let clock = 1_000_000
   const motions: (MotionInput | undefined)[] = []
   const snapshots: (readonly PetBubble[])[] = []
   const tracker = createBubbleTracker({
-    now: () => clock,
     onMotion: motion => motions.push(motion),
     onBubbles: bubbles => snapshots.push(bubbles),
     ...options,
   })
   const advance = (ms: number) => {
-    clock += ms
     vi.advanceTimersByTime(ms)
   }
   return { tracker, motions, snapshots, advance, flush: () => advance(COALESCE) }
@@ -132,59 +129,33 @@ describe('createBubbleTracker', () => {
     flush()
     expect(motions.at(-1)).toBe('thinking')
 
-    // 再过很久（三条的终态脉冲窗口都过期）也还是 thinking：会话登记里只有它是「活着」的档位
+    // 再过很久也还是 thinking：三条终态气泡是**限时**的，从不参与声明式聚合
     advance(20_000)
     flush()
     expect(motions.at(-1)).toBe('thinking')
   })
 
-  /* ---------------------------- 终态档脉冲窗口 ---------------------------- */
+  /* --------------------------- 两条动画通道的分工 --------------------------- */
 
-  it('success：气泡 3s 收起，动作留 10s 让动画播完，然后才回落', () => {
-    const { tracker, motions, flush, advance } = setup()
-    tracker.show({ id: 's', description: '已完成', motion: 'success' })
-    flush()
-    expect(motions.at(-1)).toBe('success')
-
-    // 气泡按 SUCCESS_TOAST_TIMEOUT = 3s 收起
-    advance(3000)
-    expect(tracker.bubbles).toHaveLength(0)
-    // 动作还在（TERMINAL_PULSE_TTL = 10s）
-    expect(motions.at(-1)).toBe('success')
-    advance(5000)
-    expect(motions.at(-1)).toBe('success')
-    // 窗口到期（10s）→ 回落 motion prop
-    advance(2000)
-    flush()
-    expect(motions.at(-1)).toBeUndefined()
-  })
-
-  it('failed：气泡 4s 收起，动作留 10s 让动画自己播完（与 success 同一套语义）', () => {
+  it('限时气泡（timeout > 0）不进声明式聚合：动画由 Pet 用 pet.motion(...) 播一次', () => {
     const { tracker, motions, flush, advance } = setup()
     tracker.show({ id: 'f', description: '失败', motion: 'failed' })
     flush()
-    expect(motions.at(-1)).toBe('failed')
-
-    // 4s：气泡到点收起，动作**不该**跟着断（否则动画被掐在半截）
+    // 从出现到收起，声明式聚合里始终没有它（所以气泡超时收起不可能掐断动画）
+    expect(motions.at(-1)).toBeUndefined()
     advance(4000)
     expect(tracker.bubbles).toHaveLength(0)
-    flush()
-    expect(motions.at(-1)).toBe('failed')
-
-    // 10s：窗口到期 → 回落 motion prop
-    advance(6000)
     flush()
     expect(motions.at(-1)).toBeUndefined()
   })
 
-  it('同一档位重复上报不重起窗口；换档位则重新起', () => {
-    const { tracker, motions, flush, advance } = setup()
-    tracker.show({ id: 's', description: '完成', motion: 'success' })
+  it('常驻气泡（timeout: 0）参与聚合；同一个 id 改成限时后退出聚合', () => {
+    const { tracker, motions, flush } = setup()
+    tracker.show({ id: 't', description: '思考中', motion: 'thinking' })
     flush()
-    advance(9000)
-    // 同档位文本更新：窗口不重置
-    tracker.show({ id: 's', description: '完成（更新）', motion: 'success' })
-    advance(1000)
+    expect(motions.at(-1)).toBe('thinking')
+
+    tracker.show({ id: 't', description: '思考中', motion: 'thinking', timeout: 5000 })
     flush()
     expect(motions.at(-1)).toBeUndefined()
   })

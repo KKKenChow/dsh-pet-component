@@ -175,7 +175,7 @@ pet.bubble.clear()
 | `image` | `string` | — | 配图地址（宿主给完整 URL） |
 | `loading` | `boolean` | `false` | 显示内置 CSS 圆环（加载态） |
 | `variant` | `'default' \| 'success' \| 'warning' \| 'danger'` | `'default'` | 语义色，决定内置图标与默认收起时长 |
-| `motion` | `MotionInput` | — | 会话档位；状态机按 `STATUS_PRIORITY` 表聚合（含终态脉冲窗口）后声明式交给 `<Pet>` |
+| `motion` | `MotionInput` | — | 会话档位；**常驻**气泡（`timeout: 0`）按 `STATUS_PRIORITY` 聚合后声明式交给 `<Pet>`，**限时**气泡的动画改由 `Pet` 用 `pet.motion(...)` 播一次 |
 | `timeout` | `number` | 按档位 | 自动收起 ms（`success` 3000 / `failed`·`error` 4000 / `review` 2500；其余档位常驻） |
 | `placement` | `'top' \| 'bottom'` | `'top'` | 相对宠物的方向 |
 
@@ -198,8 +198,11 @@ pet.bubble.clear()
 
 * **首拍只记基线**：挂载后第一次到点以 `reason: 'baseline'` 通知宿主，且这期间推回的文本**不会展示**（对应 dsh-pet 的 `hasBaseline`，避免启动/刷新时重放旧句子）；`mutteringImmediate` 可关掉这个行为。
 * **宿主推回才展示**：组件不持有 Promise。`pet.muttering(text, { image?, duration? })` 从 `animations.events.whisper` 整池随机抽一段动画播放（避开上一段），并弹一条碎碎念气泡（**随那段插播动画结束而收起**，`mutteringDuration` 是硬上限）；这句话走 `title`（说话语气、不占图标位），配图走 `image`；池为空时回落 `mutteringMotion`（缺省 `waving` —— Codex 图集走这条）。
-* **状态登记处与可见层是两层**（移植自参考实现的 `sessions` / toast 分层）：`pet.bubble({ id, motion })` 登记的档位留在状态机里，可见气泡每处最多 3 条 —— 被上限挤下去、或到点收起，都**只影响可见层**，动作照旧由登记的档位聚合。所以「三条叠加挤掉常驻的加载态」之后，加载动画仍然在（三条的终态脉冲过期后也是）。
-* **终态档有独立的保持窗口**：`success` / `error` 的气泡 3s 收起，动作还留 10s（`failed` 1.8s）让动画完整播完 —— 上游注释里记的正是「成功动画没播完就换回待机」这个报告。
+* **状态登记处与可见层是两层**（移植自参考实现的 `sessions` / toast 分层）：`pet.bubble({ id, motion })` 登记的档位留在状态机里，可见气泡每处最多 3 条 —— 被上限挤下去、或到点收起，都**只影响可见层**。所以「三条叠加挤掉常驻的加载态」之后，加载动画仍然在（那三条是限时的，压根不参与聚合）。
+* **两条动画通道**（关键，决定动画会不会被气泡掐断）：
+  - **常驻气泡**（`timeout: 0`，如工作档 / 等待档 / 你显式 `timeout: 0` 的加载态）→ 参与聚合 → 由 `<Pet motion>` **声明式**驱动。状态在，动画就在。
+  - **限时气泡**（`timeout > 0`，如 `success` 3000 / `failed`·`error` 4000 / `review` 2500）→ **不进聚合** → `Pet` 用 `pet.motion(...)` **播一次**。动画由命令面自己播完，气泡到点自己收，谁也掐不断谁。
+  - 这条取代了早期的「终态档聚合保持窗口」（`FAILED_PULSE_TTL` / `TERMINAL_PULSE_TTL`）：那个窗口正是拿聚合态去掐/留动画，所以失败档（上游 1.8s）会在动画中途把状态撤掉。
 * **碎碎念气泡跟着它的插播动画走**：`events.whisper` 那段插播播完（渲染器回报的动画不再是它）就收起气泡，`mutteringDuration`（缺省 10s）只是宿主可调的硬上限。
 * **收起过的不再被同一档位重建**：终态档（`success` / `failed` / `error`）自动收起后**档位没变**就不重弹（对齐上游 `dismissed`：状态重复上报不该把刚收起的气泡又弹回来）；档位换了、或显式 `timeout` 的通知气泡收起后再推，都会照常出现。
 * **只有终态档会自己收起**：`success` 3000 / `failed`·`error` 4000 / `review` 2500，其余档位（工作档、等待档）常驻等状态变化；`loading: true` 一律回到 Info 档（对齐 `toastContent`：`isLoading` 只出现在 `default` 档位）。聚合下发还带 100ms 合并窗口，多会话交错时不会把动画反复切回。
@@ -367,10 +370,18 @@ cd playground && pnpm dev
 ### 构建与构建检查
 
 ```bash
-pnpm run typecheck   # TypeScript 类型检查
-pnpm run lint        # ESLint 代码风格规范检查
-pnpm test            # 单元测试 (Vitest，包含 API 快照测试)
-pnpm run build       # 构建产物生成 (tsdown → dist/)
+pnpm run typecheck    # TypeScript 类型检查
+pnpm run lint         # ESLint 代码风格规范检查
+pnpm run test:unit    # 纯逻辑单测（Vitest，含 API 快照测试；会先 build）
+pnpm run test:browser # 真浏览器测试（Vitest Browser Mode，跑本机 Chrome）
+pnpm test             # build + 全部 Vitest 项目（watch）
+pnpm run build        # 构建产物生成 (tsdown → dist/)
+```
+
+测试分两个项目（见 `vitest.config.ts`）：`unit` 覆盖纯逻辑（`createBubbleTracker` / `createBubble` /
+JSONC 解析 / API 快照），`browser` 覆盖 Node 侧根本测不到的部分 —— 真 DOM 的队列与层叠、
+**真 CSS 过渡到底动了没有**、以及 React 副作用顺序（声明层与命令面的交班规则）。
+浏览器项目用 `channel: 'chrome'` 跑本机已装的 Chrome，不需要 `playwright install`。
 ```
 
 ---

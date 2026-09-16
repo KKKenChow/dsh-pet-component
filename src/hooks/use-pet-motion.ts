@@ -14,7 +14,8 @@ export interface PetMotionState {
 export interface UsePetMotionOptions {
   /**
    * 声明式动作（props.motion）。它是**回落层**而不是受控值：
-   * 命令面下发过的动作优先，直到 `motion` 的取值变化 —— 那时命令面被清掉、prop 重新接管。
+   * 命令面下发过的动作优先，直到 `motion` 的取值变化 —— 那时循环命令被清掉、prop 重新接管；
+   * **正在播的一次性命令**则保留到播完（见 `retainOverrideOnPropChange`）。
    */
   motion?: MotionInput
   /** 命令面 ref（`<Pet ref={...} />` 用的同一个 ref） */
@@ -68,6 +69,25 @@ function toState(input: MotionInput | undefined, revision: number): PetMotionSta
  * 3. `motion` prop 用内容指纹（`motionInputKey`）比较，对象字面量每次渲染都是新引用，
  *    直接比引用会无限回写。
  */
+/**
+ * `motion` prop 变化时，命令面（`pet.motion(...)`）该不该作废。
+ *
+ * - **循环命令 → 作废**：这是「命令面优先于 `motion` prop，直到 prop 变化」的全部实现；
+ * - **正在播的一次性命令 → 保留**，由 `finish()` 在播完后自己交还声明层。
+ *
+ * 为什么要留一次性命令：聚合态是**晚一拍**才下发的（`STATUS_COALESCE_MS = 100` 的 trailing
+ * 窗口），「加载 → 完成 / 失败」时气泡先更新（命令面发出完成 / 失败动画），100ms 后聚合态
+ * 才从工作档掉成待机档 —— 那一刻若清掉命令，刚起播的动画会被直接掐成待机（用户报告）。
+ *
+ * 上游 `deepseek-harness-desktop` 用同一份「两层互不干涉」的结论解决同一个坑
+ * （`src/pet/utils/bubble-tracker.ts:38-46`）：终态档的聚合保持时长 `TERMINAL_PULSE_TTL`
+ * 与 toast 的 `scheduleHide` 超时**刻意不同**，因为「聚合状态提前回落会掐断未播完的动画」；
+ * 动画播完由视频 `ended` 自然回落。
+ */
+export function retainOverrideOnPropChange(previous: PetMotionState | null): PetMotionState | null {
+  return previous !== null && !previous.loop ? previous : null
+}
+
 export function usePetMotion(options: UsePetMotionOptions): UsePetMotionReturn {
   const { motion, ref, onMotionChange } = options
 
@@ -95,8 +115,8 @@ export function usePetMotion(options: UsePetMotionOptions): UsePetMotionReturn {
     lastPropKeyRef.current = propKey
     revisionRef.current += 1
     setPropState(toState(motion, revisionRef.current))
-    // eslint-disable-next-line react/set-state-in-effect -- 声明值变了就作废旧的命令层（否则上一次 pet.motion 会一直压着新的 motion prop），这是「prop 变化重新接管」的全部实现
-    setOverride(null)
+    // eslint-disable-next-line react/set-state-in-effect -- 声明值变了要按 retainOverrideOnPropChange 的规则收尾旧的命令层，这是「prop 变化重新接管」的全部实现
+    setOverride(retainOverrideOnPropChange)
     // eslint-disable-next-line react/set-state-in-effect -- 换动作要清掉「已播完」标记，否则新动作会被上一轮的收尾状态吃掉
     setDone(null)
   }, [propKey, motion])
@@ -144,6 +164,15 @@ export function usePetMotion(options: UsePetMotionOptions): UsePetMotionReturn {
     const current = baseRef.current
     if (current.loop)
       return
+    // 命令面的一次性动作播完 → **交还声明层**（`motion` prop），而不是直接落 idle：
+    // 这是「限时气泡用 `pet.motion()` 播一次」能安全叠在常驻档位（thinking / waiting）之上的前提
+    // —— 否则一次成功的庆祝播完，正在进行的会话状态会掉成待机。
+    if (overrideRef.current !== null && overrideRef.current.revision === current.revision) {
+      overrideRef.current = null
+      setOverride(null)
+      setDone(null)
+      return
+    }
     setDone(current.revision)
   }, [])
 

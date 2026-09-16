@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   BUBBLE_MOTION_PRIORITY,
-  BUBBLE_TERMINAL_PULSE_TTL,
   BUBBLE_TERMINAL_TIMEOUT,
   createBubble,
-  hasPulseWindow,
   isTerminalMotion,
   MAX_VISIBLE_BUBBLES,
   motionKey,
   motionType,
   resolveBubbleTimeout,
   resolveBubbleVariant,
-  terminalPulseTtlOf,
   terminalTimeoutOf,
   updateBubble,
 } from '../src/utils/bubble'
@@ -24,10 +21,6 @@ describe('常量表', () => {
   it('终态档的自动收起时长 = scheduleHide 的三个常量', () => {
     expect(BUBBLE_TERMINAL_TIMEOUT).toEqual({ failed: 4000, error: 4000, review: 2500, success: 3000 })
     expect(MAX_VISIBLE_BUBBLES).toBe(3)
-  })
-
-  it('终态档的聚合保持窗口 = FAILED_PULSE_TTL / TERMINAL_PULSE_TTL', () => {
-    expect(BUBBLE_TERMINAL_PULSE_TTL).toEqual({ failed: 10000, error: 10000, success: 10000 })
   })
 
   it('优先级表覆盖 15 个动作槽（14 动作 + 手势态 dragging）', () => {
@@ -60,21 +53,12 @@ describe('档位判定', () => {
     expect(motionKey(undefined)).toBeUndefined()
   })
 
-  it('终态档 = 会自己收起的那四档；脉冲窗口只有三档（review 不在内）', () => {
+  it('终态档 = 会自己收起的那四档（review 也在内）', () => {
     for (const motion of ['failed', 'review', 'error', 'success'] as const)
       expect(isTerminalMotion(motion)).toBe(true)
     for (const motion of ['thinking', 'working', 'result', 'waiting', 'running', 'idle'] as const)
       expect(isTerminalMotion(motion)).toBe(false)
     expect(isTerminalMotion(undefined)).toBe(false)
-
-    expect(hasPulseWindow('failed')).toBe(true)
-    expect(hasPulseWindow('error')).toBe(true)
-    expect(hasPulseWindow('success')).toBe(true)
-    // review 有 2.5s 收起时长，但没有聚合窗口 —— 与其他会话并存时照常参与聚合
-    expect(hasPulseWindow('review')).toBe(false)
-    expect(terminalPulseTtlOf('review')).toBe(0)
-    expect(terminalPulseTtlOf('failed')).toBe(10000)
-    expect(terminalPulseTtlOf('success')).toBe(10000)
   })
 
   it('terminalTimeoutOf 只对终态档给时长', () => {

@@ -8,6 +8,7 @@ import { useControllablePet } from '../hooks/use-controllable-pet'
 import { useDoubleClick } from '../hooks/use-double-click'
 import { useMuttering } from '../hooks/use-muttering'
 import { usePetBubbles } from '../hooks/use-pet-bubbles'
+import { motionKey } from '../utils/bubble'
 import { PetBubbleLayer } from './bubble-layer'
 import { CodexPet } from './codex-pet'
 import { DshPet } from './dsh-pet'
@@ -162,13 +163,39 @@ export function Pet(props: PetProps) {
   bubbleHandleRef.current = bubbleHandle
 
   /**
-   * 气泡聚合出的动作 —— **声明式**交给渲染器的 `motion` prop，对齐参考实现
+   * 常驻气泡聚合出的动作 —— **声明式**交给渲染器的 `motion` prop，对齐参考实现
    * （`app.tsx` 的 `motion={dragging ? moving-* : bubble.motion}`）。
    *
-   * 聚合（多会话优先级、终态脉冲窗口、100ms 合并窗口）全在
-   * `src/utils/bubble-tracker.ts` 里，且与可见气泡列表**互不影响**：气泡被上限挤掉、
-   * 被超时收起，都不会掐断动作（这正是参考实现 `sessions` 与 toast 分层的原因）。
+   * 聚合（多会话优先级、100ms 合并窗口）全在 `src/utils/bubble-tracker.ts` 里，且**只聚合
+   * `timeout: 0` 的常驻气泡** —— 所以限时气泡到点收起时，`motion` prop 不会变，
+   * 正在播的动画也就不会被掐断。
    */
+  /**
+   * **限时气泡**（`timeout > 0`）的动画走**命令面**播一次 —— 与气泡生命周期彻底解耦：
+   * 气泡到点自己收，动画自己播完，谁都不去掐它。
+   *
+   * 同一个 id 只在「新建 / 换档位」时重放，所以原地更新文字不会打断动画。
+   * 常驻气泡（`timeout: 0`）不走这里，而是走下面的声明式 `motion` prop —— 状态在，动画就在。
+   */
+  const transientFiredRef = useRef(new Map<string, string>())
+  useEffect(() => {
+    const fired = transientFiredRef.current
+    for (const bubble of bubbles) {
+      const input = bubble.motion
+      if (input === undefined || bubble.duration <= 0)
+        continue
+      const token = `${bubble.created}:${motionKey(input) ?? ''}`
+      if (fired.get(bubble.id) === token)
+        continue
+      fired.set(bubble.id, token)
+      motionRequest(typeof input === 'string' ? { type: input, replay: true } : { ...input, replay: true })
+    }
+    for (const id of [...fired.keys()]) {
+      if (!bubbles.some(bubble => bubble.id === id))
+        fired.delete(id)
+    }
+  }, [bubbles, motionRequest])
+
   const effectiveMotion = bubbleMotion ?? motion
 
   // 有气泡处于加载态时**自动**碎碎念挂起（别让后台碎碎念打断正在跑的会话）；

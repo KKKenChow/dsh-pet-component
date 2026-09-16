@@ -3,12 +3,11 @@ import type { MotionInput, PetRenderMotion } from '../types/motion'
 import {
   BUBBLE_MOTION_PRIORITY,
   createBubble,
-  hasPulseWindow,
   isTerminalMotion,
   MAX_VISIBLE_BUBBLES,
   motionKey,
   motionType,
-  terminalPulseTtlOf,
+  resolveBubbleTimeout,
   updateBubble,
 } from './bubble'
 
@@ -16,20 +15,22 @@ import {
  * 会话气泡状态机 —— **移植**自 `source/deepseek-harness-desktop/src/pet/utils/bubble-tracker.ts`
  * （605 行）与 `src/utils/toast.ts` 的淘汰逻辑，把 HeroUI toast 换成组件自带的可见层。
  *
- * 参考实现是**两层**，这里保持同样的分层（这是关键，之前自己发明的那版把两层揉在一起，
+ * 参考实现是**两层**，这里保持同样的分层（之前自己发明的那版把两层揉在一起，
  * 于是「上限淘汰 / 超时收起」会连带把动作一起干掉）：
  *
  * | 层 | 参考实现 | 本文件 |
  * | --- | --- | --- |
- * | 状态登记处 | `sessions` / `failedUntil` / `previousStatus` / `dismissed` | 同名同义 |
+ * | 状态登记处 | `sessions` / `previousStatus` / `dismissed` | 同名同义 |
  * | 可见层 | HeroUI `ToastQueue`（上限 `MAX_VISIBLE_TOASTS`、`scheduleHide` 独立收起） | `entries` / `order` |
  *
- * 由此得到的性质（与参考实现逐条一致）：
- * - `statusOf()` 只从**状态登记处**聚合 → 可见气泡被上限挤掉、被超时收起，都**不影响动作**；
- * - 终态档（`failed` / `error` / `success`）有独立的**脉冲窗口**（`failedUntil` + TTL）：
- *   气泡 3s 收起，动作还留 10s 让动画播完；
- * - `dismissed`：收起过的档位不被「同档位」重新弹出来；
- * - 聚合下发有 `STATUS_COALESCE_MS` 合并窗口，避免多会话交错时动画被反复切回。
+ * 两条动画通道（`statusOf` 只认第一条）：
+ * - **常驻气泡**（`timeout === 0`）→ 参与聚合 → `<Pet motion>` 声明式驱动；
+ * - **限时气泡**（`timeout > 0`）→ 不进聚合 → `Pet` 用 `pet.motion(...)` 播一次，动画自己播完，
+ *   气泡超时收起也不会掐断它。所以这里**没有**脉冲窗口（早期照搬上游 `failedUntil` /
+ *   `FAILED_PULSE_TTL` 的那套已删）。
+ *
+ * 其余性质：`dismissed`（收起过的终态档不被同档位重弹）、`STATUS_COALESCE_MS` 合并窗口
+ * （多会话交错时不反复切回动画）。
  *
  * 纯逻辑（无 React、无 DOM）：定时器与时钟都可注入，单测直接驱动。
  */
@@ -54,8 +55,6 @@ export interface BubbleTrackerOptions {
   setTimer?: (handler: () => void, ms: number) => TimerHandle
   /** 注入清除定时器（单测用；缺省 `clearTimeout`） */
   clearTimer?: (handle: TimerHandle) => void
-  /** 注入时钟（单测用；缺省 `Date.now`） */
-  now?: () => number
 }
 
 export interface BubbleTracker {
@@ -86,17 +85,12 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
   const maxVisible = options.maxVisible ?? MAX_VISIBLE_BUBBLES
   const setTimer = options.setTimer ?? ((handler: () => void, ms: number) => setTimeout(handler, ms))
   const clearTimerFn = options.clearTimer ?? ((handle: TimerHandle) => clearTimeout(handle))
-  const now = options.now ?? (() => Date.now())
 
   /* ------------------------------ 状态登记处 ------------------------------ */
 
   const sessions = new Map<string, TrackedSession>()
   /** 会话 id → 上一次的动作档位指纹（`previousStatus`） */
   const previousStatus = new Map<string, string | undefined>()
-  /** 会话 id → 终态档脉冲窗口截止时间（`failedUntil`） */
-  const failedUntil = new Map<string, number>()
-  /** 终态档脉冲已经用完的会话（`consumedFailed`）：同档位不再起第二个窗口 */
-  const consumedFailed = new Set<string>()
   /** 已经收起过、且不应被同档位重建的会话（`dismissed`） */
   const dismissed = new Set<string>()
 
@@ -114,7 +108,6 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
   /* -------------------------------- 定时器 -------------------------------- */
 
   const hideTimers = new Map<string, TimerHandle>()
-  const pulseTimers = new Map<string, TimerHandle>()
   const pruneTimers = new Map<string, TimerHandle>()
 
   /* --------------------------------- 聚合 --------------------------------- */
@@ -138,7 +131,7 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
   }
 
   /**
-   * 关掉一条**可见**气泡：只动可见层，会话登记与脉冲窗口原样保留
+   * 关掉一条**可见**气泡：只动可见层，会话登记原样保留
    * （参考实现的 `closeToast`）—— 这正是「上限挤掉最旧之后动作还在」的原因。
    */
   const closeEntry = (id: string) => {
@@ -171,35 +164,25 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
     })
   }
 
-  const statusOfSession = (session: TrackedSession, ignoreTerminal = false): MotionInput | undefined => {
-    const motion = session.motion
-    if (motion === undefined)
-      return undefined
-    if (ignoreTerminal && terminalPulseTtlOf(motion) > 0)
-      return undefined
-    return motion
-  }
-
   /**
-   * 聚合出最高优先级的档位（移植 `statusOf`）：遍历**全部会话**，终态档过了脉冲窗口
-   * 就回落底层状态（这里没有原始快照，等价于该会话不再贡献动作）。
+   * 聚合出**常驻**气泡里优先级最高的档位（移植 `statusOf`）。
+   *
+   * 两条通道的分工（这是整个气泡动画模型的核心）：
+   * - `timeout === 0` 的常驻气泡 → 参与聚合 → 由 `<Pet motion>` **声明式**驱动：状态在，动画就在；
+   * - `timeout > 0` 的限时气泡 → **不参与聚合**（`Pet` 已经用 `pet.motion(...)` 让动画播一次），
+   *   于是它的超时收起既不改 `motion` prop、也就不会把正在播的动画掐掉。
    */
   const statusOf = (): MotionInput | undefined => {
     let best: MotionInput | undefined
     let maxPriority = 0
     for (const session of sessions.values()) {
-      let status = statusOfSession(session)
-      if (status !== undefined && hasPulseWindow(status)) {
-        const deadline = failedUntil.get(session.id)
-        if (deadline === undefined || now() >= deadline)
-          status = statusOfSession(session, true)
-      }
-      if (status === undefined)
+      const motion = session.motion
+      if (motion === undefined || resolveBubbleTimeout(session) > 0)
         continue
-      const priority = BUBBLE_MOTION_PRIORITY[motionType(status) as PetRenderMotion] ?? 0
+      const priority = BUBBLE_MOTION_PRIORITY[motionType(motion) as PetRenderMotion] ?? 0
       if (priority > maxPriority) {
         maxPriority = priority
-        best = status
+        best = motion
         if (maxPriority === BUBBLE_MOTION_PRIORITY.waiting)
           break // waiting 是最高优先级，提前收工
       }
@@ -235,22 +218,21 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
     sessions.delete(id)
     previousStatus.delete(id)
     dismissed.delete(id)
-    failedUntil.delete(id)
-    consumedFailed.delete(id)
-    clearTimer(pulseTimers, id)
     clearTimer(hideTimers, id)
     clearTimer(pruneTimers, id)
     closeEntry(id)
   }
 
+  /**
+   * 沉淀：隐藏后超过保留时间的**限时**会话彻底清掉。
+   *
+   * 常驻会话（`timeout: 0`）不沉淀 —— 它还在驱动 `motion` prop。
+   */
   const pruneSession = (id: string) => {
     const session = sessions.get(id)
     if (session === undefined)
       return
-    // 还在可见层 / 还有脉冲窗口 / 还有非终态档位 → 不能沉淀
-    if (entries.has(id) || failedUntil.has(id))
-      return
-    if (session.motion !== undefined && !isTerminalMotion(session.motion))
+    if (entries.has(id) || resolveBubbleTimeout(session) === 0)
       return
     removeSession(id)
     updateAgg()
@@ -287,35 +269,6 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
       armPrune(id)
     }, entry.duration)
     hideTimers.set(id, timer)
-  }
-
-  /** 终态档脉冲窗口（移植 `trackFailedPulse`）：转入终态时起窗口，过期后动作回落。 */
-  const trackTerminalPulse = (session: TrackedSession) => {
-    const id = session.id
-    const ttl = terminalPulseTtlOf(session.motion)
-    if (ttl > 0) {
-      // 同档位重复上报不重起窗口；已经用过窗口的会话不再起第二个
-      if (previousStatus.get(id) === motionKey(session.motion) || consumedFailed.has(id))
-        return
-      const deadline = now() + ttl
-      failedUntil.set(id, deadline)
-      clearTimer(pulseTimers, id)
-      const timer = setTimer(() => {
-        if (failedUntil.get(id) !== deadline)
-          return
-        failedUntil.delete(id)
-        pulseTimers.delete(id)
-        consumedFailed.add(id)
-        updateAgg()
-        armPrune(id)
-      }, ttl)
-      pulseTimers.set(id, timer)
-      return
-    }
-    // 非终态档上任 → 窗口作废（对齐参考实现 trackFailedPulse 的 else 分支）
-    failedUntil.delete(id)
-    clearTimer(pulseTimers, id)
-    consumedFailed.delete(id)
   }
 
   /** 可见层同步一条会话（移植 `syncToast`，内容由宿主给，不再从会话快照推导）。 */
@@ -376,7 +329,6 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
     if (options_.variant === undefined && (options_.loading !== undefined || options_.motion !== undefined))
       session.variant = undefined
     sessions.set(id, session)
-    trackTerminalPulse(session)
     syncBubble(session)
     updateAgg()
     return id
@@ -403,7 +355,7 @@ export function createBubbleTracker(options: BubbleTrackerOptions = {}): BubbleT
   const dispose = () => {
     // 幂等：只释放定时器与可见层，会话登记保留（StrictMode 的「挂载 → 释放 → 再挂载」下
     // 第二次释放是空操作，状态机本身仍可继续接收 show/close）
-    for (const map of [hideTimers, pulseTimers, pruneTimers]) {
+    for (const map of [hideTimers, pruneTimers]) {
       map.forEach(timer => clearTimerFn(timer))
       map.clear()
     }

@@ -436,7 +436,7 @@ export function PetDemo() {
                 className="btn"
                 title="连发三条：演示叠加与上限淘汰；上限只挤掉可见层，被挤掉那条的档位仍在聚合里"
                 onClick={() => {
-                  runBubble({ id: 'demo-1', title: '会话 A', description: '正在检索', loading: true, motion: 'thinking', timeout: 8000 })
+                  runBubble({ id: 'demo-1', title: '会话 A', description: '正在检索', loading: true, motion: 'thinking' })
                   runBubble({ id: 'demo-2', title: '会话 B', description: '等待确认', variant: 'warning', motion: 'waiting' })
                   runBubble({ id: 'demo-3', title: '会话 C', description: '已完成', variant: 'success', motion: 'success' })
                 }}

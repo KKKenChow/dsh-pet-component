@@ -96,28 +96,51 @@ interface LayerBubble {
 function useLayerBubbles(bubbles: readonly PetBubble[]): LayerBubble[] {
   const [leaving, setLeaving] = useState<readonly PetBubble[]>([])
   const previousRef = useRef<readonly PetBubble[]>(bubbles)
-  /** 每条退场气泡的清理定时器（key = 气泡 id），卸载时统一清掉 */
+  /**
+   * 每条退场气泡的清理定时器，key = `id:created`。
+   *
+   * 带上 `created` 是为了**分代**：同一个 id 被重新推出来又再次收起时，新一轮的退场项
+   * 有自己的计时器，上一轮的计时器到点只会发现「这条已经不在队列里了」而空跑一次。
+   */
   const timersRef = useRef(new Map<string, number>())
 
-  useEffect(() => {
+  // **渲染期**登记退场项 —— 这一步不能挪进 effect。
+  //
+  // effect 要等这次提交结束才跑，中间会先提交一帧「旧条目已经没了、退场条目还没上」的树：
+  // React 会把退场那条当成**新节点**挂载，而新节点一上来就是终点样式
+  // （`opacity: 0` / `translate: -100%`），浏览器不会为「初始值就等于目标值」建过渡 ——
+  // 退场动画永远不会发生。只有一条气泡时，`items.length === 0` 还会让整层返回 `null`，
+  // 连节点带层一起拆掉。这正是用户报告的「气泡消失的时候没有动画」。
+  //
+  // 渲染期更新自身 state（React 的「props 变化时调整 state」模式）不会提交中间那棵树，
+  // 同一次提交里旧条目消失、退场条目出现，key 不变 → DOM 节点原地保留 → 过渡照常发生。
+  if (previousRef.current !== bubbles) {
     const previous = previousRef.current
     previousRef.current = bubbles
     const live = new Set(bubbles.map(bubble => bubble.id))
-    const gone = previous.filter(bubble => !live.has(bubble.id) && !timersRef.current.has(bubble.id))
-    if (gone.length === 0)
-      return
-    setLeaving(current => [
-      ...current.filter(bubble => !gone.some(entry => entry.id === bubble.id)),
-      ...gone,
-    ])
-    for (const bubble of gone) {
-      const timer = window.setTimeout(() => {
-        timersRef.current.delete(bubble.id)
-        setLeaving(current => current.filter(entry => entry.id !== bubble.id))
-      }, BUBBLE_EXIT_MS)
-      timersRef.current.set(bubble.id, timer)
+    const gone = previous.filter(bubble => !live.has(bubble.id))
+    if (gone.length > 0) {
+      setLeaving(current => [
+        ...current.filter(bubble => !gone.some(entry => entry.id === bubble.id)),
+        ...gone,
+      ])
     }
-  }, [bubbles])
+  }
+
+  // 计时器是副作用，留在 effect 里：只负责到点把那条从队列摘掉
+  useEffect(() => {
+    for (const bubble of leaving) {
+      const key = `${bubble.id}:${bubble.created}`
+      if (timersRef.current.has(key))
+        continue
+      const timer = window.setTimeout(() => {
+        timersRef.current.delete(key)
+        // 按**对象身份**摘除：同 id 的下一轮退场项不能被这一轮误删
+        setLeaving(current => current.filter(entry => entry !== bubble))
+      }, BUBBLE_EXIT_MS)
+      timersRef.current.set(key, timer)
+    }
+  }, [leaving])
 
   useEffect(() => () => {
     for (const timer of timersRef.current.values())

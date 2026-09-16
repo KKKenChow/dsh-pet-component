@@ -32,7 +32,7 @@ const FEATURES: { title: string, body: string }[] = [
   },
   {
     title: '气泡与碎碎念',
-    body: 'pet.bubble(...) 叠在宠物头顶：同 id 再下发就是原地更新（加载态 / 标题 / 图标 / 语义色 / 捆绑运行动画），超出三条关最旧。muttering 按 eventsRefreshSec.whisper 的节拍通知宿主，生成完 pet.muttering(text) 推回 —— 首拍只记基线，与 dsh-pet 一致。',
+    body: 'pet.bubble(...) 叠在宠物头顶：同 id 再下发就是原地更新（加载态 / 标题 / 图标 / 语义色 / 捆绑运行动画）',
   },
 ]
 

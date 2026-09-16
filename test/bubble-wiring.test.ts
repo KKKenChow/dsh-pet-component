@@ -15,11 +15,9 @@ interface Harness {
 }
 
 function harness(): Harness {
-  let clock = 1_000_000
   const snaps: (readonly PetBubble[])[] = []
-  const tracker = createBubbleTracker({ now: () => clock, onBubbles: bubbles => snaps.push(bubbles) })
+  const tracker = createBubbleTracker({ onBubbles: bubbles => snaps.push(bubbles) })
   const advance = (ms: number) => {
-    clock += ms
     vi.advanceTimersByTime(ms)
   }
   return { tracker, snaps, advance }

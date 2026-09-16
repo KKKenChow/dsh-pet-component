@@ -657,3 +657,27 @@ const effectiveMotion = bubbleMotion ?? motion        // 声明式，交给渲�
 
 > 两个容易踩的时序事实：元素「插入后同一帧就改样式」时浏览器没有可比的前值，过渡不会建立
 > （所以测退场要先等入场动画播完）；折叠态的内容是**淡出**到 0 的（200ms），不能同步读。
+
+### 17.4 `@reause/core` 盘点结论：没有值得替换的手写实现
+
+全仓扫过一遍（`src/**` 只剩 5 个文件还有裸计时器/监听器），逐条评估后**都不建议替换**：
+
+| 位置 | 为什么不动 |
+| --- | --- |
+| `src/hooks/use-sprite-player.ts:71-107` | 动态间隔自链 + 命令式 `paint()` 直写 style、零重渲染；换 `useTimeoutFn` 会每帧 2 次 setState（帧间隔 120-160ms） |
+| `src/hooks/use-idle-roll.ts:72-86` | 随机 20-45s 自链；`useIntervalFn` 是固定周期，会改变等待分布语义 |
+| `useLayerBubbles`（`src/components/bubble-layer.tsx`） | 按 id 的并发定时器 Map；`useStateAutoReset` 是单定时器，`useTimeoutFn` 放进 `for` 循环违反 hooks 规则 |
+| `src/hooks/use-video-crossfade.ts:125-134` | `loadeddata` 监听与同步 `readyState >= 2` 快速路径配套；换 `useEventListener` 需要条件式 hook 或加合成 state |
+| `src/utils/react.ts:8` | `useIsomorphicLayoutEffect` 没有对应 hook（`useMounted` 不是布局期，会让宠物样式晚一拍） |
+| `src/utils/bubble-tracker.ts:38,54,86` | 可注入定时器是**为单测服务**的；换成 hook 就把纯逻辑绑到 React 上 |
+| `src/utils/media-cache.ts:117` | 故意全局共享、不 revoke 的 objectURL；`useObjectUrl` 会随依赖变化撤销重建，破坏跨实例复用 |
+
+两处「边缘可换」，净收益都接近 0，**建议不做**：
+
+1. 入场计时器 → `useStateAutoReset(true, BUBBLE_ENTER_MS)`：该 hook 只在 setter 被调用时才武装
+   重置定时器，要保住「挂载即入场」还得再补一个 mount effect，行数并没有省。
+2. `src/components/codex-pet.tsx` 的 `new Image()` 探针 → `useImage`：省约 6 行，但回调晚一个 tick。
+
+> 判断某个 hook 能不能用时，别只 grep `@reause/core` 的 `dist/index.d.ts` —— `useTimeoutFn` /
+> `useUnmount` / `useStateAutoReset` 这些都是 `export * from '@reause/shared'` 转出来的。
+> 另外 `@reause/integrations` 根导入会因缺 peer `async-validator` 报错，只能子路径导入。
